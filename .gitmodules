@@ -1,0 +1,3 @@
+[submodule "SlowFast"]
+	path = SlowFast
+	url = https://github.com/ICalofir/SlowFast
