@@ -1,3 +1,6 @@
 [submodule "SlowFast"]
 	path = SlowFast
 	url = https://github.com/ICalofir/SlowFast
+[submodule "football"]
+	path = football
+	url = https://github.com/ICalofir/football
