@@ -15,12 +15,28 @@ class DatasetGeneration:
 
     def _get_observations(self, dump_path):
         frames_path = os.path.join(dump_path, 'frames')
-        frames_name = [os.path.join(frames_path, frame)
+        frames_path = [os.path.join(frames_path, frame)
                        for frame in sorted(os.listdir(frames_path), key=lambda x: int(x.split('_')[-1][:-4]))]
 
         observations = json.load(open(os.path.join(dump_path, 'observations.json'), 'r'))
 
-        return frames_name, observations
+        return frames_path, observations
+
+    def _get_frame(self, frame_path):
+        frame = np.array(Image.open(frame_path))
+
+        return frame
+
+    def _get_ball_distance(self, start_position, end_position):
+        distance = np.sqrt(np.square(end_position[0] - start_position[0]) + np.square(end_position[1] - start_position[1]))
+
+        return distance
+
+    def _get_last_frame_pass(self, start_frame, observations, num_frames):
+        now_step = 'step_{}'.format(start_frame)
+
+        return -1
+
 
     def _generate_dataset_pass(self):
         os.makedirs(self._dataset_output_path, exist_ok=True)
@@ -33,13 +49,18 @@ class DatasetGeneration:
         for dump_name in sorted(os.listdir(self._dataset_path)):
             dump_path = os.path.join(self._dataset_path, dump_name)
 
-            frames_name, observations = self._get_observations(dump_path)
+            frames_path, observations = self._get_observations(dump_path)
 
-            for i, (key, value) in enumerate(observations.items()):
-                if value['game_mode'] != 'e_GameMode_Normal':
-                    print(key, value['game_mode'])
+            for frame_idx in range(0, len(observations)):
+                start_frame_idx = int(observations['step_{}'.format(frame_idx)]['frame_name'].split('_')[-1])
+                last_frame_idx = self._get_last_frame_pass(frame_idx, observations, min(300, len(observations) - 1 - frame_idx))
 
-            logging.info('Done')
+                if last_frame_idx == -1:
+                    continue
+
+                break
+
+            logging.info('Done!')
 
     def generate(self):
         if self._dataset_name == 'pass':
