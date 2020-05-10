@@ -1,5 +1,7 @@
 # Project
-Datasets/
+datasets/
+scripts/
+papers/
 
 # Python
 *.pyc
