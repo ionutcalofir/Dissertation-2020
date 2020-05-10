@@ -37,8 +37,11 @@ class DatasetGeneration:
 
         return -1
 
-
     def _generate_dataset_pass(self):
+        # TODO:
+        #   - generate pass videos
+        #   - generate non-pass videos
+        #       - get random frames that are not in the pass videos
         os.makedirs(self._dataset_output_path, exist_ok=True)
 
         passes_path = os.path.join(self._dataset_output_path, 'passes')
@@ -62,8 +65,24 @@ class DatasetGeneration:
 
             logging.info('Done!')
 
+    def _generate_dataset_expected_goals(self):
+        # TODO:
+        #   - generate goal videos
+        #   - generate no goal videos
+        #       - get frames where the player performs a shot
+        pass
+
+    def _generate_dataset_heatmap(self):
+        # TODO:
+        #   - generate heatmaps at some fixed intervals from a match
+        pass
+
     def generate(self):
         if self._dataset_name == 'pass':
             self._generate_dataset_pass()
+        elif self._dataset_name == 'expected_goals':
+            self._generate_dataset_expected_goals()
+        elif self._dataset_name == 'heatmap':
+            self._generate_dataset_heatmap()
         else:
             logging.error('Dataset generation for {} is not currently implemented'.format(self._dataset_name))
