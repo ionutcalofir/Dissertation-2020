@@ -4,6 +4,13 @@ import numpy as np
 from absl import logging
 from PIL import Image
 
+from football_utils.football_constants import *
+from football_utils.observations import Observations
+from football_utils.frames import Frames
+from football_utils.game_engine import GameEngine
+from football_utils.game_pass import GamePass
+from football_utils.video import Video
+
 class DatasetGeneration:
     def __init__(self,
                  dataset_name,
@@ -13,55 +20,93 @@ class DatasetGeneration:
         self._dataset_path = dataset_path
         self._dataset_output_path = dataset_output_path
 
-    def _get_observations(self, dump_path):
-        frames_path = os.path.join(dump_path, 'frames')
-        frames_path = [os.path.join(frames_path, frame)
-                       for frame in sorted(os.listdir(frames_path), key=lambda x: int(x.split('_')[-1][:-4]))]
-
-        observations = json.load(open(os.path.join(dump_path, 'observations.json'), 'r'))
-
-        return frames_path, observations
-
-    def _get_frame(self, frame_path):
-        frame = np.array(Image.open(frame_path))
-
-        return frame
-
-    def _get_ball_distance(self, start_position, end_position):
-        distance = np.sqrt(np.square(end_position[0] - start_position[0]) + np.square(end_position[1] - start_position[1]))
-
-        return distance
-
-    def _get_last_frame_pass(self, start_frame, observations, num_frames):
-        now_step = 'step_{}'.format(start_frame)
-
-        return -1
+        self._observations = Observations()
+        self._frames = Frames()
+        self._game_engine = GameEngine()
+        self._pass = GamePass()
+        self._video = Video()
 
     def _generate_dataset_pass(self):
-        # TODO:
-        #   - generate pass videos
-        #   - generate non-pass videos
-        #       - get random frames that are not in the pass videos
         os.makedirs(self._dataset_output_path, exist_ok=True)
 
-        passes_path = os.path.join(self._dataset_output_path, 'passes')
-        non_passes_path = os.path.join(self._dataset_output_path, 'non_passes')
+        passes_path = os.path.join(self._dataset_output_path, '1')
+        non_passes_path = os.path.join(self._dataset_output_path, '0')
         os.makedirs(passes_path, exist_ok=True)
         os.makedirs(non_passes_path, exist_ok=True)
 
         for dump_name in sorted(os.listdir(self._dataset_path)):
+            logging.info('Preprocess dump {}'.format(dump_name))
             dump_path = os.path.join(self._dataset_path, dump_name)
 
-            frames_path, observations = self._get_observations(dump_path)
+            frames_path = self._frames.get_frames_path(dump_path)
+            observations = self._observations.get_observations(dump_path)
 
-            for frame_idx in range(0, len(observations)):
-                start_frame_idx = int(observations['step_{}'.format(frame_idx)]['frame_name'].split('_')[-1])
-                last_frame_idx = self._get_last_frame_pass(frame_idx, observations, min(300, len(observations) - 1 - frame_idx))
+            nr_observations_wo_agent = len(observations) - len(frames_path)
 
-                if last_frame_idx == -1:
+            pass_frames = []
+            non_pass_frames = []
+
+            # Agent action case
+            for frame_idx in range(len(frames_path)):
+                step_idx = frame_idx * STEPS_PER_FRAME - 1
+                start_observation = observations['agent_action_frame_{}'.format(frame_idx)]
+
+                left_pass_type, left_team_start_frame_idx, left_team_end_frame_idx = \
+                    self._pass.get_frame_pass('left_team', step_idx, start_observation, observations, min(300, nr_observations_wo_agent - 1 - step_idx))
+                right_pass_type, right_team_start_frame_idx, right_team_end_frame_idx = \
+                    self._pass.get_frame_pass('right_team', step_idx, start_observation, observations, min(300, nr_observations_wo_agent - 1 - step_idx))
+
+                if left_pass_type == -1 and right_pass_type == -1:
                     continue
 
-                break
+                assert not (left_pass_type != -1 and right_pass_type != -1), 'End frame idx is != -1 for both teams!'
+
+                if left_pass_type != -1:
+                    if left_pass_type == 1:
+                        pass_frames.append((left_team_start_frame_idx, left_team_end_frame_idx))
+                    else:
+                        non_pass_frames.append((left_team_start_frame_idx, left_team_end_frame_idx))
+                else:
+                    if right_pass_type == 1:
+                        pass_frames.append((right_team_start_frame_idx, right_team_end_frame_idx))
+                    else:
+                        non_pass_frames.append((right_team_start_frame_idx, right_team_end_frame_idx))
+
+            for step_idx in range(nr_observations_wo_agent):
+                start_observation = self._observations.get_observation(step_idx, observations)
+                left_pass_type, left_team_start_frame_idx, left_team_end_frame_idx = \
+                    self._pass.get_frame_pass('left_team', step_idx, start_observation, observations, min(300, nr_observations_wo_agent - 1 - step_idx))
+                right_pass_type, right_team_start_frame_idx, right_team_end_frame_idx = \
+                    self._pass.get_frame_pass('right_team', step_idx, start_observation, observations, min(300, nr_observations_wo_agent - 1 - step_idx))
+
+                if left_pass_type == -1 and right_pass_type == -1:
+                    continue
+
+                assert not (left_pass_type != -1 and right_pass_type != -1), 'End frame idx is != -1 for both teams!'
+
+                if left_pass_type != -1:
+                    if left_pass_type == 1:
+                        pass_frames.append((left_team_start_frame_idx, left_team_end_frame_idx))
+                    else:
+                        non_pass_frames.append((left_team_start_frame_idx, left_team_end_frame_idx))
+                else:
+                    if right_pass_type == 1:
+                        pass_frames.append((right_team_start_frame_idx, right_team_end_frame_idx))
+                    else:
+                        non_pass_frames.append((right_team_start_frame_idx, right_team_end_frame_idx))
+
+            for i, pass_frame in enumerate(pass_frames):
+                logging.info('Preprocess pass frames {}/{}'.format(i + 1, len(pass_frames)))
+                video_path = os.path.join(passes_path, '{}_video_{}'.format(dump_name, i + 1))
+                frames = [self._frames.get_frame(frames_path[frame]) for frame in range(pass_frame[0] - 1, pass_frame[1] + 2)]
+                self._video.dump_video(video_path, frames)
+
+            print()
+            for i, non_pass_frame in enumerate(non_pass_frames):
+                logging.info('Preprocess non pass frames {}/{}'.format(i + 1, len(non_pass_frames)))
+                video_path = os.path.join(non_passes_path, '{}_video_{}'.format(dump_name, i + 1))
+                frames = [self._frames.get_frame(frames_path[frame]) for frame in range(non_pass_frame[0] - 1, non_pass_frame[1] + 2)]
+                self._video.dump_video(video_path, frames)
 
             logging.info('Done!')
 
