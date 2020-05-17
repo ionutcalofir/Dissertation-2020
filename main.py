@@ -1,17 +1,18 @@
-from absl import app
 from absl import flags
+from absl import app
 from absl import logging
 
 from football_utils.dataset_generation import DatasetGeneration
 
 FLAGS = flags.FLAGS
 
-flags.DEFINE_enum('phase', None, ['generate_dataset'], 'Phase to run.')
+if not FLAGS.is_parsed():
+    flags.DEFINE_enum('phase', None, ['generate_dataset'], 'Phase to run.')
 
-# DATASET GENERATION
-flags.DEFINE_enum('dataset_generation_name', None, ['pass', 'expected_goals', 'heatmap'], 'What dataset to generate.')
-flags.DEFINE_string('dataset_generation_path', './datasets/raw_dataset', 'Path to the raw dataset.')
-flags.DEFINE_string('dataset_generation_output_path', './datasets/dataset', 'Path to the output dataset.')
+    # DATASET GENERATION
+    flags.DEFINE_enum('dataset_generation_name', None, ['pass', 'expected_goals', 'heatmap'], 'What dataset to generate.')
+    flags.DEFINE_string('dataset_generation_path', './datasets/raw_dataset', 'Path to the raw dataset.')
+    flags.DEFINE_string('dataset_generation_output_path', './datasets/pass_dataset', 'Path to the output dataset.')
 
 def main(_):
     if FLAGS.phase is None:
