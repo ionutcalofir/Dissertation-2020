@@ -1,6 +1,8 @@
 import json
 import os
+import math
 import numpy as np
+import matplotlib.pyplot as plt
 from absl import logging
 from PIL import Image
 
@@ -202,9 +204,60 @@ class DatasetGeneration:
             logging.info('Done!')
 
     def _generate_dataset_heatmap(self):
-        # TODO:
-        #   - generate heatmaps at some fixed intervals from a match
-        pass
+        os.makedirs(self._dataset_output_path, exist_ok=True)
+
+        for dump_name in sorted(os.listdir(self._dataset_path)):
+            if dump_name != 'dump_20200517-231054000739':
+                continue
+            logging.info('Preprocess dump {}'.format(dump_name))
+            dump_path = os.path.join(self._dataset_path, dump_name)
+
+            frames_path = self._frames.get_frames_path(dump_path)
+            observations = self._observations.get_observations(dump_path)
+
+            frame = self._frames.get_frame(frames_path[0])
+            frames = []
+            heatmap = np.zeros(frame.shape[:2])
+            for frame_nr, frame_path in enumerate(frames_path):
+                frames.append(self._frames.get_frame(frame_path))
+
+                if (frame_nr + 1) % 100 == 0:
+                    logging.info('Preprocess frame: {}/{}'.format(frame_nr + 1, len(frames_path)))
+                now_step = 'step_{}'.format(frame_nr * 10 + 9)
+                ball_point = (observations[now_step]['ball']['position_projected']['x'],
+                              observations[now_step]['ball']['position_projected']['y'])
+
+                r = 10
+                center_y, center_x = ball_point[1], ball_point[0]
+                y, x = np.ogrid[-center_y:heatmap.shape[0] - center_y, -center_x:heatmap.shape[1] - center_x]
+                mask = x*x + y*y <= r*r
+                heatmap[mask] += 1.
+
+                if (frame_nr + 1) % 200 == 0:
+                    heatmap_path = os.path.join(self._dataset_output_path, 'heatmap_{}.png'.format((frame_nr + 1) // 200))
+                    heatmap_normalized = heatmap / np.max(heatmap)
+                    fig, ax = plt.subplots(figsize=(14, 7.5))
+                    plt.imshow(frame)
+                    plt.imshow(heatmap_normalized, cmap='hot', alpha=0.5)
+                    plt.savefig(heatmap_path, bbox_inches='tight')
+
+                    # video_path = os.path.join(self._dataset_output_path, '{}_video_{}'.format(dump_name, (frame_nr + 1) // 200))
+                    # self._video.dump_video(video_path, frames)
+                    # frames = []
+
+            if len(frames_path) % 200 != 0:
+                heatmap_path = os.path.join(self._dataset_output_path, 'heatmap_{}.png'.format(math.ceil(len(frames_path) / 200)))
+                heatmap_normalized = heatmap / np.max(heatmap)
+                fig, ax = plt.subplots(figsize=(14, 7.5))
+                plt.imshow(frame)
+                plt.imshow(heatmap_normalized, cmap='hot', alpha=0.5)
+                plt.savefig(heatmap_path, bbox_inches='tight')
+
+                # video_path = os.path.join(self._dataset_output_path, '{}_video_{}'.format(dump_name, math.ceil(len(frames_path) / 200)))
+                # self._video.dump_video(video_path, frames)
+                # frames = []
+
+        logging.info('Done!')
 
     def generate(self):
         if self._dataset_name == 'pass':
