@@ -1,5 +1,4 @@
 from football_utils.football_constants import *
-from football_utils.observations import Observations
 from football_utils.game_engine import GameEngine
 
 class GamePass:

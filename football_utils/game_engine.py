@@ -26,6 +26,6 @@ class GameEngine:
         if action == 'pass':
             return observation[team]['pressed_action'] in PASS_ACTIONS
         elif action == 'shot':
-            return observation[team]['pressed_action'] in SHOT_ACTION
+            return observation[team]['pressed_action'] in SHOT_ACTIONS
         else:
             raise Exception('Action unknown!')
