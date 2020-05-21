@@ -205,6 +205,7 @@ class DatasetGeneration:
 
     def _generate_dataset_heatmap(self):
         os.makedirs(self._dataset_output_path, exist_ok=True)
+        cmap_name = 'viridis'
 
         for dump_name in sorted(os.listdir(self._dataset_path)):
             if dump_name != 'dump_20200517-231054000739':
@@ -238,7 +239,7 @@ class DatasetGeneration:
                     heatmap_normalized = heatmap / np.max(heatmap)
                     fig, ax = plt.subplots(figsize=(14, 7.5))
                     plt.imshow(frame)
-                    plt.imshow(heatmap_normalized, cmap='hot', alpha=0.5)
+                    plt.imshow(heatmap_normalized, cmap=cmap_name, alpha=0.5)
                     plt.savefig(heatmap_path, bbox_inches='tight')
 
                     # video_path = os.path.join(self._dataset_output_path, '{}_video_{}'.format(dump_name, (frame_nr + 1) // 200))
@@ -250,7 +251,7 @@ class DatasetGeneration:
                 heatmap_normalized = heatmap / np.max(heatmap)
                 fig, ax = plt.subplots(figsize=(14, 7.5))
                 plt.imshow(frame)
-                plt.imshow(heatmap_normalized, cmap='hot', alpha=0.5)
+                plt.imshow(heatmap_normalized, cmap=cmap_name, alpha=0.5)
                 plt.savefig(heatmap_path, bbox_inches='tight')
 
                 # video_path = os.path.join(self._dataset_output_path, '{}_video_{}'.format(dump_name, math.ceil(len(frames_path) / 200)))
