@@ -1,4 +1,6 @@
+import os
 import cv2
+import subprocess
 
 class Video:
     def __init__(self, video_quality=2):
@@ -22,3 +24,20 @@ class Video:
             self._video_writer.write(frame)
 
         self._video_writer.release()
+
+    def downscale_video(self, inname, outname):
+        """
+        Original script here:
+        https://github.com/facebookresearch/video-nonlocal-net/blob/master/process_data/kinetics/downscale_video_joblib.py
+        """
+        status = False
+        inname = '"%s"' % inname
+        outname = '"%s"' % outname
+        command = "ffmpeg  -loglevel panic -i {} -filter:v scale=\"trunc(oh*a/2)*2:256\" -q:v 1 -c:a copy {}".format( inname, outname)
+        try:
+            output = subprocess.check_output(command, shell=True, stderr=subprocess.STDOUT)
+        except subprocess.CalledProcessError as err:
+            return status, err.output
+
+        status = os.path.exists(outname)
+        return status, 'Downscaled'
