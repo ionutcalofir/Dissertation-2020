@@ -1,6 +1,7 @@
 import json
 import os
 import math
+import random
 import numpy as np
 import matplotlib.pyplot as plt
 from absl import logging
@@ -19,10 +20,14 @@ class DatasetGeneration:
                  dataset_name,
                  dataset_path,
                  dataset_output_path,
+                 video_recognition_classes,
                  downscale_videos):
+        random.seed(42)
+
         self._dataset_name = dataset_name
         self._dataset_path = dataset_path
         self._dataset_output_path = dataset_output_path
+        self._video_recognition_classes = video_recognition_classes
         self._downscale_videos = downscale_videos
 
         self._observations = Observations()
@@ -41,11 +46,13 @@ class DatasetGeneration:
                 self._pass.get_frame_pass('left_team', step_idx, start_observation, observations, num_steps)
             right_action_type, right_team_start_frame_idx, right_team_end_frame_idx = \
                 self._pass.get_frame_pass('right_team', step_idx, start_observation, observations, num_steps)
-        elif action in ['shot_goal', 'shot']:
+        elif action in ['expected_goals', 'shot']:
             left_action_type, left_team_start_frame_idx, left_team_end_frame_idx = \
                 self._goals.get_frame_goal('left_team', step_idx, start_observation, observations, num_steps)
             right_action_type, right_team_start_frame_idx, right_team_end_frame_idx = \
                 self._goals.get_frame_goal('right_team', step_idx, start_observation, observations, num_steps)
+        else:
+            raise Exception('Action {} is unknown!'.format(action))
 
         if left_action_type == -1 and right_action_type == -1:
             return -1, -1, -1
@@ -66,10 +73,14 @@ class DatasetGeneration:
     def _generate_dataset_action(self, action):
         os.makedirs(self._dataset_output_path, exist_ok=True)
 
-        positive_action_path = os.path.join(self._dataset_output_path, '1')
-        negative_action_path = os.path.join(self._dataset_output_path, '0')
-        os.makedirs(positive_action_path, exist_ok=True)
-        os.makedirs(negative_action_path, exist_ok=True)
+        if self._dataset_name == 'video_recognition':
+            action_paths = {cls : os.path.join(self._dataset_output_path, cls) for cls in self._video_recognition_classes}
+            action_paths['no_action'] = os.path.join(self._dataset_output_path, 'no_action')
+        elif action == 'expected_goals':
+            action_paths = {cls : os.path.join(self._dataset_output_path, cls) for cls in ['0', '1']}
+
+        for action_path in action_paths.values():
+            os.makedirs(action_path, exist_ok=True)
 
         for dump_name in sorted(os.listdir(self._dataset_path)):
             logging.info('Preprocess dump {}'.format(dump_name))
@@ -78,46 +89,103 @@ class DatasetGeneration:
             frames_path = self._frames.get_frames_path(dump_path)
             observations = self._observations.get_observations(dump_path)
 
-            positive_action_frames = []
-            negative_action_frames = []
+            if self._dataset_name == 'video_recognition':
+                action_frames = {cls : [] for cls in self._video_recognition_classes}
+                action_frames['no_action'] = []
+            elif action == 'expected_goals':
+                action_frames = {cls : [] for cls in ['0', '1']}
 
             for step_idx in range(len(observations)):
                 start_observation = self._observations.get_observation(step_idx, observations)
 
-                action_type, start_frame_idx, end_frame_idx = \
-                        self._get_frame_action(step_idx, start_observation, observations, min(200, len(observations) - 1 - step_idx), action=action)
+                if self._dataset_name == 'video_recognition':
+                    for action in self._video_recognition_classes:
+                        action_type, start_frame_idx, end_frame_idx = \
+                            self._get_frame_action(step_idx, start_observation, observations, min(DATASET_GENERATION_FRAMES_WINDOW, len(observations) - 1 - step_idx), action=action)
 
-                if action_type == -1:
-                    continue
+                        if action_type == -1:
+                            continue
 
-                if action in ['pass', 'shot']:
-                    start_frame_idx = start_frame_idx // STEPS_PER_FRAME - 1 # -1 frame back for more information
-                    end_frame_idx = end_frame_idx // STEPS_PER_FRAME + 1 # +1 frame back for more information
-                elif action == 'shot_goal':
-                    end_frame_idx = start_frame_idx // STEPS_PER_FRAME - 2 # -2 frame back so it stops right when the player performs the shot (start_frame_idx is not put there by mistake)
-                    start_frame_idx = start_frame_idx // STEPS_PER_FRAME - 20 # -20 frames back before the player performs the shot
+                        if action in ['pass', 'shot']:
+                            start_frame_idx = max(0, start_frame_idx // STEPS_PER_FRAME - 2) # -2 frame back for more information
+                            end_frame_idx = min(end_frame_idx // STEPS_PER_FRAME + 3, len(observations) // STEPS_PER_FRAME - 1) # +3 frame back for more information
 
-                if (len(positive_action_frames) > 0 and start_frame_idx == positive_action_frames[-1][0]) \
-                        or (len(negative_action_frames) > 0 and start_frame_idx == negative_action_frames[-1][0]):
-                    continue
+                        if ((action_type == 1) or (action_type == 0 and action == 'shot')) \
+                                and not (len(action_frames[action]) > 0 and start_frame_idx == action_frames[action][-1][0]):
+                            action_frames[action].append((start_frame_idx, end_frame_idx))
 
-                if action_type == 0:
-                    negative_action_frames.append((start_frame_idx, end_frame_idx))
-                else:
-                    positive_action_frames.append((start_frame_idx, end_frame_idx))
+                        # For `pass` action hard negative examples will be provided. (When a player
+                        # performs a pass, but the ball is intercepted by the other team)
+                        if action == 'pass' and action_type == 0 \
+                                and not (len(action_frames['no_action']) > 0 and start_frame_idx == action_frames['no_action'][-1][0]):
+                            action_frames['no_action'].append((start_frame_idx, end_frame_idx))
+                elif action == 'expected_goals':
+                    action_type, start_frame_idx, end_frame_idx = \
+                        self._get_frame_action(step_idx, start_observation, observations, min(DATASET_GENERATION_FRAMES_WINDOW, len(observations) - 1 - step_idx), action=action)
 
-            for i, positive_action_frame in enumerate(positive_action_frames):
-                logging.info('Preprocess {} frames {}/{}'.format(action, i + 1, len(positive_action_frames)))
-                video_path = os.path.join(positive_action_path, '{}_video_{}'.format(dump_name, i + 1))
-                frames = [self._frames.get_frame(frames_path[frame]) for frame in range(positive_action_frame[0] - 1, positive_action_frame[1] + 2)]
-                self._video.dump_video(video_path, frames)
+                    if action_type == -1:
+                        continue
 
-            print()
-            for i, negative_action_frame in enumerate(negative_action_frames):
-                logging.info('Preprocess no {} frames {}/{}'.format(action, i + 1, len(negative_action_frames)))
-                video_path = os.path.join(negative_action_path, '{}_video_{}'.format(dump_name, i + 1))
-                frames = [self._frames.get_frame(frames_path[frame]) for frame in range(negative_action_frame[0] - 1, negative_action_frame[1] + 2)]
-                self._video.dump_video(video_path, frames)
+                    end_frame_idx = start_frame_idx // STEPS_PER_FRAME # it stops right when the player performs the shot (start_frame_idx is not put there by mistake)
+                    start_frame_idx = max(0, start_frame_idx // STEPS_PER_FRAME - 20) # -20 frames back before the player performs the shot
+
+                    if action_type == 0 \
+                            and not (len(action_frames['0']) > 0 and start_frame_idx == action_frames['0'][-1][0]):
+                        action_frames['0'].append((start_frame_idx, end_frame_idx))
+                    elif action_type == 1 \
+                            and not (len(action_frames['1']) > 0 and start_frame_idx == action_frames['1'][-1][0]):
+                        action_frames['1'].append((start_frame_idx, end_frame_idx))
+
+            for cls in action_frames:
+                logging.info('Preprocess {} class'.format(cls))
+                for i, action_frame in enumerate(action_frames[cls]):
+                    logging.info('Preprocess class {} frames {}/{}'.format(cls, i + 1, len(action_frames[cls])))
+                    video_path = os.path.join(action_paths[cls], '{}_video_{}'.format(dump_name, i + 1))
+                    if cls == 'no_action' and self._dataset_name == 'video_recognition':
+                        video_path += '_hard_pass'
+                    frames = [self._frames.get_frame(frames_path[frame]) for frame in range(action_frame[0], action_frame[1])]
+                    self._video.dump_video(video_path, frames)
+
+            # Add random frames for the `no_action` class
+            if self._dataset_name == 'video_recognition':
+                all_frames = [action_frame for cls in action_frames for action_frame in action_frames[cls]]
+                num_examples = sum([len(action_frames[cls]) for cls in action_frames if cls != 'no_action']) // (len(action_frames) - 1)
+                min_diff = min([action_frame[1] - action_frame[0] for action_frame in all_frames])
+                max_diff = max([action_frame[1] - action_frame[0] for action_frame in all_frames])
+
+                lim_search = 10 # maximum number of attempts to generate a valid example
+                examples_frames = []
+                for i, example in enumerate(range(num_examples)):
+                    logging.info('Generating {}/{} example for `no_action` class'.format(i, num_examples))
+                    for step in range(lim_search):
+                        start_frame = math.floor(random.uniform(0, len(observations) // STEPS_PER_FRAME))
+                        r = math.floor(random.uniform(min_diff, max_diff))
+                        end_frame = min(start_frame + r, len(observations) // STEPS_PER_FRAME - 1)
+
+                        is_ok = True
+                        for frames_range in all_frames:
+                            if (frames_range[0] <= start_frame and start_frame <= frames_range[1]) \
+                                    or (frames_range[0] <= end_frame and end_frame <= frames_range[1]) \
+                                    or (start_frame <= frames_range[0] and frames_range[1] <= end_frame):
+                                is_ok = False
+                                break
+                        for frames_range in examples_frames:
+                            if (frames_range[0] <= start_frame and start_frame <= frames_range[1]) \
+                                    or (frames_range[0] <= end_frame and end_frame <= frames_range[1]) \
+                                    or (start_frame <= frames_range[0] and frames_range[1] <= end_frame):
+                                is_ok = False
+                                break
+
+                        if is_ok:
+                            examples_frames.append((start_frame, end_frame))
+                            break
+                logging.info('Generated examples {}/{} for `no_action` class!'.format(len(examples_frames), num_examples))
+
+                for i, action_frame in enumerate(examples_frames):
+                    logging.info('Preprocess {} frames {}/{}'.format('no_action', i + 1, len(examples_frames)))
+                    video_path = os.path.join(action_paths['no_action'], '{}_video_{}'.format(dump_name, i + 1))
+                    frames = [self._frames.get_frame(frames_path[frame]) for frame in range(action_frame[0], action_frame[1])]
+                    self._video.dump_video(video_path, frames)
 
             logging.info('Done!')
 
@@ -177,12 +245,10 @@ class DatasetGeneration:
         logging.info('Done!')
 
     def generate(self):
-        if self._dataset_name == 'pass':
-            self._generate_dataset_action(action='pass')
-        elif self._dataset_name == 'shot':
-            self._generate_dataset_action(action='shot')
-        elif self._dataset_name == 'shot_goal':
-            self._generate_dataset_action(action='shot_goal')
+        if self._dataset_name == 'video_recognition':
+            self._generate_dataset_action(action=None)
+        elif self._dataset_name == 'expected_goals':
+            self._generate_dataset_action(action='expected_goals')
         elif self._dataset_name == 'heatmap':
             self._generate_dataset_heatmap()
         else:

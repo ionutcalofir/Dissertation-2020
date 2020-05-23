@@ -26,3 +26,4 @@ SHOT_ACTIONS = [
                 PlayerActions.e_FunctionType_Shot
                ]
 STEPS_PER_FRAME = 10
+DATASET_GENERATION_FRAMES_WINDOW = 30 * STEPS_PER_FRAME
