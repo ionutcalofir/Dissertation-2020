@@ -4,6 +4,7 @@ import math
 import random
 import numpy as np
 import matplotlib.pyplot as plt
+from joblib import Parallel, delayed
 from absl import logging
 from PIL import Image
 
@@ -35,7 +36,7 @@ class DatasetGeneration:
         self._game_engine = GameEngine()
         self._pass = GamePass()
         self._goals = GameGoals()
-        self._video = Video()
+        self._video = Video(self._downscale_videos)
 
     def _get_frame_action(self, step_idx, start_observation, observations, num_steps, action):
         # left/right_action_type = -1 - no action
@@ -82,8 +83,8 @@ class DatasetGeneration:
         for action_path in action_paths.values():
             os.makedirs(action_path, exist_ok=True)
 
-        for dump_name in sorted(os.listdir(self._dataset_path)):
-            logging.info('Preprocess dump {}'.format(dump_name))
+        for dump_nr, dump_name in enumerate(sorted(os.listdir(self._dataset_path))):
+            logging.info('Preprocess dump {} ({}/{})'.format(dump_name, dump_nr + 1, len(os.listdir(self._dataset_path))))
             dump_path = os.path.join(self._dataset_path, dump_name)
 
             frames_path = self._frames.get_frames_path(dump_path)
@@ -136,15 +137,16 @@ class DatasetGeneration:
                             and not (len(action_frames['1']) > 0 and start_frame_idx == action_frames['1'][-1][0]):
                         action_frames['1'].append((start_frame_idx, end_frame_idx))
 
+            def save_videos(i, action_frame, cls, num_examples, random_examples=False):
+                print('Preprocess class {} frames {}/{}'.format(cls, i + 1, num_examples))
+                video_path = os.path.join(action_paths[cls], '{}_video_{}'.format(dump_name, i + 1))
+                if cls == 'no_action' and self._dataset_name == 'video_recognition' and not random_examples:
+                    video_path += '_hard_pass'
+                frames = [self._frames.get_frame(frames_path[frame]) for frame in range(action_frame[0], action_frame[1])]
+                self._video.dump_video(video_path, frames)
+
             for cls in action_frames:
-                logging.info('Preprocess {} class'.format(cls))
-                for i, action_frame in enumerate(action_frames[cls]):
-                    logging.info('Preprocess class {} frames {}/{}'.format(cls, i + 1, len(action_frames[cls])))
-                    video_path = os.path.join(action_paths[cls], '{}_video_{}'.format(dump_name, i + 1))
-                    if cls == 'no_action' and self._dataset_name == 'video_recognition':
-                        video_path += '_hard_pass'
-                    frames = [self._frames.get_frame(frames_path[frame]) for frame in range(action_frame[0], action_frame[1])]
-                    self._video.dump_video(video_path, frames)
+                Parallel(n_jobs=-2)(delayed(save_videos)(i, action_frame, cls, len(action_frames[cls])) for i, action_frame in enumerate(action_frames[cls]))
 
             # Add random frames for the `no_action` class
             if self._dataset_name == 'video_recognition':
@@ -156,7 +158,6 @@ class DatasetGeneration:
                 lim_search = 10 # maximum number of attempts to generate a valid example
                 examples_frames = []
                 for i, example in enumerate(range(num_examples)):
-                    logging.info('Generating {}/{} example for `no_action` class'.format(i, num_examples))
                     for step in range(lim_search):
                         start_frame = math.floor(random.uniform(0, len(observations) // STEPS_PER_FRAME))
                         r = math.floor(random.uniform(min_diff, max_diff))
@@ -181,13 +182,9 @@ class DatasetGeneration:
                             break
                 logging.info('Generated examples {}/{} for `no_action` class!'.format(len(examples_frames), num_examples))
 
-                for i, action_frame in enumerate(examples_frames):
-                    logging.info('Preprocess {} frames {}/{}'.format('no_action', i + 1, len(examples_frames)))
-                    video_path = os.path.join(action_paths['no_action'], '{}_video_{}'.format(dump_name, i + 1))
-                    frames = [self._frames.get_frame(frames_path[frame]) for frame in range(action_frame[0], action_frame[1])]
-                    self._video.dump_video(video_path, frames)
+                Parallel(n_jobs=-2)(delayed(save_videos)(i, action_frame, 'no_action', len(examples_frames), random_examples=True) for i, action_frame in enumerate(examples_frames))
 
-            logging.info('Done!')
+            logging.info('Done!\n')
 
     def _generate_dataset_heatmap(self):
         os.makedirs(self._dataset_output_path, exist_ok=True)

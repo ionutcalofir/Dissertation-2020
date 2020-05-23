@@ -48,6 +48,23 @@ class GameGoals:
             if (team_touch_ball != -1 and player_touch_ball != -1) \
                     or (not is_in_play):
                 if is_in_play:
+                    # Check the case where the keeper or a player touches the ball but after
+                    # it's still goal (deflection).
+                    for future_step in range(step + 1, start_step_idx + num_steps):
+                        future_now_step = 'step_{}'.format(future_step)
+
+                        future_player_touch_ball = observations[future_now_step]['player_touch_ball']
+                        future_team_touch_ball = observations[future_now_step]['team_touch_ball']
+                        future_is_goal_scored = observations[future_now_step]['is_goal_scored']
+
+                        if future_is_goal_scored:
+                            return 1, touch_step, future_step
+
+                        if future_player_touch_ball == -1 and future_team_touch_ball == -1:
+                            continue
+                        else:
+                            break
+
                     return 0, touch_step, step
                 else:
                     if is_goal_scored:
