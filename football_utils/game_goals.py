@@ -16,24 +16,22 @@ class GameGoals:
         start_controlled_player = start_observation[team]['controlled_player']
         start_pressed_action = start_observation[team]['pressed_action']
 
-        # Get the step where the controlled player touches the ball
-        # We look back from the `start_step_idx` because in case of `shot` the
-        # player's pressed action is `shot` even after he performs the action
-        last_touch_step = -1
-        for step in range(start_step_idx, max(0, start_step_idx - num_steps), -1):
+        # Get the first step where the controlled player touches the ball
+        touch_step = -1
+        for step in range(start_step_idx, min(len(observations), start_step_idx + num_steps)):
             now_step = 'step_{}'.format(step)
 
             player_touch_ball = observations[now_step]['player_touch_ball']
             team_touch_ball = observations[now_step]['team_touch_ball']
 
             if team_touch_ball == team_id and player_touch_ball == start_controlled_player:
-                last_touch_step = step
+                touch_step = step
                 break
 
-        if last_touch_step == -1:
+        if touch_step == -1:
             return -1, -1, -1
 
-        for step in range(last_touch_step + 1, start_step_idx + num_steps):
+        for step in range(touch_step + 1, start_step_idx + num_steps):
             now_step = 'step_{}'.format(step)
 
             player_touch_ball = observations[now_step]['player_touch_ball']
@@ -50,11 +48,11 @@ class GameGoals:
             if (team_touch_ball != -1 and player_touch_ball != -1) \
                     or (not is_in_play):
                 if is_in_play:
-                    return 0, last_touch_step, step
+                    return 0, touch_step, step
                 else:
                     if is_goal_scored:
-                        return 1, last_touch_step, step
+                        return 1, touch_step, step
                     else:
-                        return 0, last_touch_step, step
+                        return 0, touch_step, step
 
         return -1, -1, -1
