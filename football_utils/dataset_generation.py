@@ -18,10 +18,12 @@ class DatasetGeneration:
     def __init__(self,
                  dataset_name,
                  dataset_path,
-                 dataset_output_path):
+                 dataset_output_path,
+                 downscale_videos):
         self._dataset_name = dataset_name
         self._dataset_path = dataset_path
         self._dataset_output_path = dataset_output_path
+        self._downscale_videos = downscale_videos
 
         self._observations = Observations()
         self._frames = Frames()
@@ -30,177 +32,93 @@ class DatasetGeneration:
         self._goals = GameGoals()
         self._video = Video()
 
-    def _get_frame_pass(self, step_idx, start_observation, observations, num_steps):
-        left_pass_type, left_team_start_frame_idx, left_team_end_frame_idx = \
-            self._pass.get_frame_pass('left_team', step_idx, start_observation, observations, num_steps)
-        right_pass_type, right_team_start_frame_idx, right_team_end_frame_idx = \
-            self._pass.get_frame_pass('right_team', step_idx, start_observation, observations, num_steps)
+    def _get_frame_action(self, step_idx, start_observation, observations, num_steps, action):
+        # left/right_action_type = -1 - no action
+        # left/right_action_type = 0 - negative example of action
+        # left/right_action_type = 1 - positive example of action
+        if action == 'pass':
+            left_action_type, left_team_start_frame_idx, left_team_end_frame_idx = \
+                self._pass.get_frame_pass('left_team', step_idx, start_observation, observations, num_steps)
+            right_action_type, right_team_start_frame_idx, right_team_end_frame_idx = \
+                self._pass.get_frame_pass('right_team', step_idx, start_observation, observations, num_steps)
+        elif action in ['shot_goal', 'shot']:
+            left_action_type, left_team_start_frame_idx, left_team_end_frame_idx = \
+                self._goals.get_frame_goal('left_team', step_idx, start_observation, observations, num_steps)
+            right_action_type, right_team_start_frame_idx, right_team_end_frame_idx = \
+                self._goals.get_frame_goal('right_team', step_idx, start_observation, observations, num_steps)
 
-        if left_pass_type == -1 and right_pass_type == -1:
+        if left_action_type == -1 and right_action_type == -1:
             return -1, -1, -1
 
-        assert not (left_pass_type != -1 and right_pass_type != -1), 'Pass type is != -1 for both teams!'
+        assert not (left_action_type != -1 and right_action_type != -1), '{} type is != -1 for both teams!'.format(action)
 
-        if left_pass_type != -1:
-            if left_pass_type == 1:
+        if left_action_type != -1:
+            if left_action_type == 1:
                 return 1, left_team_start_frame_idx, left_team_end_frame_idx
             else:
                 return 0, left_team_start_frame_idx, left_team_end_frame_idx
         else:
-            if right_pass_type == 1:
+            if right_action_type == 1:
                 return 1, right_team_start_frame_idx, right_team_end_frame_idx
             else:
                 return 0, right_team_start_frame_idx, right_team_end_frame_idx
 
-    def _get_frame_goal(self, step_idx, start_observation, observations, num_steps):
-        left_shot_goal_type, left_team_start_frame_idx, left_team_end_frame_idx = \
-            self._goals.get_frame_goal('left_team', step_idx, start_observation, observations, num_steps)
-        right_shot_goal_type, right_team_start_frame_idx, right_team_end_frame_idx = \
-            self._goals.get_frame_goal('right_team', step_idx, start_observation, observations, num_steps)
-
-        if left_shot_goal_type == -1 and right_shot_goal_type == -1:
-            return -1, -1, -1
-
-        assert not (left_shot_goal_type != -1 and right_shot_goal_type != -1), 'Goal type is != -1 for both teams!'
-
-        if left_shot_goal_type != -1:
-            if left_shot_goal_type == 1:
-                return 1, left_team_start_frame_idx, left_team_end_frame_idx
-            else:
-                return 0, left_team_start_frame_idx, left_team_end_frame_idx
-        else:
-            if right_shot_goal_type == 1:
-                return 1, right_team_start_frame_idx, right_team_end_frame_idx
-            else:
-                return 0, right_team_start_frame_idx, right_team_end_frame_idx
-
-    def _generate_dataset_pass(self):
+    def _generate_dataset_action(self, action):
         os.makedirs(self._dataset_output_path, exist_ok=True)
 
-        passes_path = os.path.join(self._dataset_output_path, '1')
-        non_passes_path = os.path.join(self._dataset_output_path, '0')
-        os.makedirs(passes_path, exist_ok=True)
-        os.makedirs(non_passes_path, exist_ok=True)
+        positive_action_path = os.path.join(self._dataset_output_path, '1')
+        negative_action_path = os.path.join(self._dataset_output_path, '0')
+        os.makedirs(positive_action_path, exist_ok=True)
+        os.makedirs(negative_action_path, exist_ok=True)
 
         for dump_name in sorted(os.listdir(self._dataset_path)):
-            if dump_name != 'dump_20200517-020504163769':
-                continue
             logging.info('Preprocess dump {}'.format(dump_name))
             dump_path = os.path.join(self._dataset_path, dump_name)
 
             frames_path = self._frames.get_frames_path(dump_path)
             observations = self._observations.get_observations(dump_path)
 
-            nr_observations_wo_agent = len(observations) - len(frames_path)
+            positive_action_frames = []
+            negative_action_frames = []
 
-            pass_frames = []
-            non_pass_frames = []
-
-            # TODO Agent action case
-            # for frame_idx in range(len(frames_path)):
-            #     step_idx = frame_idx * STEPS_PER_FRAME - 1
-            #     start_observation = observations['agent_action_frame_{}'.format(frame_idx)]
-
-            #     pass_type, start_frame_idx, end_frame_idx = \
-            #             self._get_frame_pass(step_idx, start_observation, observations, min(300, nr_observations_wo_agent - 1 - step_idx))
-
-            #     if pass_type == -1:
-            #         continue
-            #     elif pass_type == 0:
-            #         non_pass_frames.append((start_frame_idx, end_frame_idx))
-            #     else:
-            #         pass_frames.append((start_frame_idx, end_frame_idx))
-
-            for step_idx in range(nr_observations_wo_agent):
+            for step_idx in range(len(observations)):
                 start_observation = self._observations.get_observation(step_idx, observations)
 
-                pass_type, start_frame_idx, end_frame_idx = \
-                        self._get_frame_pass(step_idx, start_observation, observations, min(300, nr_observations_wo_agent - 1 - step_idx))
+                action_type, start_frame_idx, end_frame_idx = \
+                        self._get_frame_action(step_idx, start_observation, observations, min(200, len(observations) - 1 - step_idx), action=action)
 
-                if pass_type == -1:
+                if action_type == -1:
                     continue
-                elif pass_type == 0:
-                    non_pass_frames.append((start_frame_idx, end_frame_idx))
-                else:
-                    pass_frames.append((start_frame_idx, end_frame_idx))
 
-            for i, pass_frame in enumerate(pass_frames):
-                logging.info('Preprocess pass frames {}/{}'.format(i + 1, len(pass_frames)))
-                video_path = os.path.join(passes_path, '{}_video_{}'.format(dump_name, i + 1))
-                frames = [self._frames.get_frame(frames_path[frame]) for frame in range(pass_frame[0] - 1, pass_frame[1] + 2)]
+                if action in ['pass', 'shot']:
+                    start_frame_idx = start_frame_idx // STEPS_PER_FRAME - 1 # -1 frame back for more information
+                    end_frame_idx = end_frame_idx // STEPS_PER_FRAME + 1 # +1 frame back for more information
+                elif action == 'shot_goal':
+                    end_frame_idx = start_frame_idx // STEPS_PER_FRAME - 2 # -2 frame back so it stops right when the player performs the shot (start_frame_idx is not put there by mistake)
+                    start_frame_idx = start_frame_idx // STEPS_PER_FRAME - 20 # -20 frames back before the player performs the shot
+
+                if (len(positive_action_frames) > 0 and start_frame_idx == positive_action_frames[-1][0]) \
+                        or (len(negative_action_frames) > 0 and start_frame_idx == negative_action_frames[-1][0]):
+                    continue
+
+                if action_type == 0:
+                    negative_action_frames.append((start_frame_idx, end_frame_idx))
+                else:
+                    positive_action_frames.append((start_frame_idx, end_frame_idx))
+
+            for i, positive_action_frame in enumerate(positive_action_frames):
+                logging.info('Preprocess {} frames {}/{}'.format(action, i + 1, len(positive_action_frames)))
+                video_path = os.path.join(positive_action_path, '{}_video_{}'.format(dump_name, i + 1))
+                frames = [self._frames.get_frame(frames_path[frame]) for frame in range(positive_action_frame[0] - 1, positive_action_frame[1] + 2)]
                 self._video.dump_video(video_path, frames)
 
             print()
-            for i, non_pass_frame in enumerate(non_pass_frames):
-                logging.info('Preprocess non pass frames {}/{}'.format(i + 1, len(non_pass_frames)))
-                video_path = os.path.join(non_passes_path, '{}_video_{}'.format(dump_name, i + 1))
-                frames = [self._frames.get_frame(frames_path[frame]) for frame in range(non_pass_frame[0] - 1, non_pass_frame[1] + 2)]
+            for i, negative_action_frame in enumerate(negative_action_frames):
+                logging.info('Preprocess no {} frames {}/{}'.format(action, i + 1, len(negative_action_frames)))
+                video_path = os.path.join(negative_action_path, '{}_video_{}'.format(dump_name, i + 1))
+                frames = [self._frames.get_frame(frames_path[frame]) for frame in range(negative_action_frame[0] - 1, negative_action_frame[1] + 2)]
                 self._video.dump_video(video_path, frames)
 
-            logging.info('Done!')
-
-    def _generate_dataset_expected_goals(self):
-        os.makedirs(self._dataset_output_path, exist_ok=True)
-
-        shot_goal_path = os.path.join(self._dataset_output_path, '1')
-        shot_no_goal_path = os.path.join(self._dataset_output_path, '0')
-        os.makedirs(shot_goal_path, exist_ok=True)
-        os.makedirs(shot_no_goal_path, exist_ok=True)
-
-        for dump_name in sorted(os.listdir(self._dataset_path)):
-            if dump_name != 'dump_20200517-205515687273':
-                continue
-            logging.info('Preprocess dump {}'.format(dump_name))
-            dump_path = os.path.join(self._dataset_path, dump_name)
-
-            frames_path = self._frames.get_frames_path(dump_path)
-            observations = self._observations.get_observations(dump_path)
-
-            nr_observations_wo_agent = len(observations) - len(frames_path)
-
-            shot_goal_frames = []
-            shot_no_goal_frames = []
-
-            # TODO Agent action case
-            # for frame_idx in range(len(frames_path)):
-            #     step_idx = frame_idx * STEPS_PER_FRAME - 1
-            #     start_observation = observations['agent_action_frame_{}'.format(frame_idx)]
-
-            #     shot_goal_type, start_frame_idx, end_frame_idx = \
-            #             self._get_frame_goal(step_idx, start_observation, observations, min(300, nr_observations_wo_agent - 1 - step_idx))
-
-            #     if shot_goal_type == -1:
-            #         continue
-            #     elif shot_goal_type == 0:
-            #         shot_no_goal_frames.append((start_frame_idx, end_frame_idx))
-            #     else:
-            #         shot_goal_frames.append((start_frame_idx, end_frame_idx))
-
-            for step_idx in range(nr_observations_wo_agent):
-                start_observation = self._observations.get_observation(step_idx, observations)
-
-                shot_goal_type, start_frame_idx, end_frame_idx = \
-                        self._get_frame_goal(step_idx, start_observation, observations, min(300, nr_observations_wo_agent - 1 - step_idx))
-
-                if shot_goal_type == -1:
-                    continue
-                elif shot_goal_type == 0:
-                    shot_no_goal_frames.append((start_frame_idx, end_frame_idx))
-                else:
-                    shot_goal_frames.append((start_frame_idx, end_frame_idx))
-
-            for i, shot_goal_frame in enumerate(shot_goal_frames):
-                logging.info('Preprocess shot goal frames {}/{}'.format(i + 1, len(shot_goal_frames)))
-                video_path = os.path.join(shot_goal_path, '{}_video_{}'.format(dump_name, i + 1))
-                frames = [self._frames.get_frame(frames_path[frame]) for frame in range(shot_goal_frame[0], shot_goal_frame[1] + 1)]
-                self._video.dump_video(video_path, frames)
-
-            print()
-            for i, shot_no_goal_frame in enumerate(shot_no_goal_frames):
-                logging.info('Preprocess shot no goal frames {}/{}'.format(i + 1, len(shot_no_goal_frames)))
-                video_path = os.path.join(shot_no_goal_path, '{}_video_{}'.format(dump_name, i + 1))
-                frames = [self._frames.get_frame(frames_path[frame]) for frame in range(shot_no_goal_frame[0], shot_no_goal_frame[1] + 1)]
-                self._video.dump_video(video_path, frames)
             logging.info('Done!')
 
     def _generate_dataset_heatmap(self):
@@ -208,8 +126,6 @@ class DatasetGeneration:
         cmap_name = 'viridis'
 
         for dump_name in sorted(os.listdir(self._dataset_path)):
-            if dump_name != 'dump_20200517-231054000739':
-                continue
             logging.info('Preprocess dump {}'.format(dump_name))
             dump_path = os.path.join(self._dataset_path, dump_name)
 
@@ -262,9 +178,11 @@ class DatasetGeneration:
 
     def generate(self):
         if self._dataset_name == 'pass':
-            self._generate_dataset_pass()
-        elif self._dataset_name == 'expected_goals':
-            self._generate_dataset_expected_goals()
+            self._generate_dataset_action(action='pass')
+        elif self._dataset_name == 'shot':
+            self._generate_dataset_action(action='shot')
+        elif self._dataset_name == 'shot_goal':
+            self._generate_dataset_action(action='shot_goal')
         elif self._dataset_name == 'heatmap':
             self._generate_dataset_heatmap()
         else:

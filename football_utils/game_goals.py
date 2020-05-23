@@ -16,22 +16,11 @@ class GameGoals:
         start_controlled_player = start_observation[team]['controlled_player']
         start_pressed_action = start_observation[team]['pressed_action']
 
-        # Check if the pressed action from the start_observation is the last pressed action for the controlled player
-        for step in range(start_step_idx + 1, start_step_idx + num_steps):
-            now_step = 'step_{}'.format(step)
-
-            now_controlled_player = observations[now_step][team]['controlled_player']
-            now_pressed_action = observations[now_step][team]['pressed_action']
-
-            if now_controlled_player != start_controlled_player:
-                break
-
-            if now_pressed_action != 'no_action':
-                return -1, -1, -1
-
-        # Get the step where the controlled player last touches the ball
+        # Get the step where the controlled player touches the ball
+        # We look back from the `start_step_idx` because in case of `shot` the
+        # player's pressed action is `shot` even after he performs the action
         last_touch_step = -1
-        for step in range(max(0, start_step_idx - num_steps), start_step_idx + 100):
+        for step in range(start_step_idx, max(0, start_step_idx - num_steps), -1):
             now_step = 'step_{}'.format(step)
 
             player_touch_ball = observations[now_step]['player_touch_ball']
@@ -39,14 +28,10 @@ class GameGoals:
 
             if team_touch_ball == team_id and player_touch_ball == start_controlled_player:
                 last_touch_step = step
+                break
 
         if last_touch_step == -1:
             return -1, -1, -1
-
-        # bb = [(now_step, observations['step_{}'.format(now_step)][team]['pressed_action']) for now_step in range(1000, 1120)]
-        # dd = [(now_step, observations['step_{}'.format(now_step)]['player_touch_ball']) for now_step in range(1000, 1120)
-        #         if observations['step_{}'.format(now_step)]['player_touch_ball'] != -1]
-        # import pdb; pdb.set_trace()
 
         for step in range(last_touch_step + 1, start_step_idx + num_steps):
             now_step = 'step_{}'.format(step)
@@ -56,17 +41,20 @@ class GameGoals:
             is_in_play = observations[now_step]['is_in_play']
             is_goal_scored = observations[now_step]['is_goal_scored']
 
+            # Check that after the controlled player touches the ball, he is not
+            # the first player that touches the ball again. (If it is, it means
+            # that he didn't perform the action)
             if team_touch_ball == team_id and player_touch_ball == start_controlled_player:
                 return -1, -1, -1
 
             if (team_touch_ball != -1 and player_touch_ball != -1) \
                     or (not is_in_play):
                 if is_in_play:
-                    return 0, last_touch_step // STEPS_PER_FRAME - 20, last_touch_step // STEPS_PER_FRAME - 1
+                    return 0, last_touch_step, step
                 else:
                     if is_goal_scored:
-                        return 1, last_touch_step // STEPS_PER_FRAME - 20, last_touch_step // STEPS_PER_FRAME - 1
+                        return 1, last_touch_step, step
                     else:
-                        return 0, last_touch_step // STEPS_PER_FRAME - 20, last_touch_step // STEPS_PER_FRAME - 1
+                        return 0, last_touch_step, step
 
         return -1, -1, -1

@@ -88,10 +88,10 @@ class GamePass:
             if now_team_touch_ball != team_id:
                 if step // STEPS_PER_FRAME - start_step_idx_touch // STEPS_PER_FRAME < 1: # at least 2 frames
                     return -1, -1, -1
-                return 0, start_step_idx_touch // STEPS_PER_FRAME, step // STEPS_PER_FRAME # bad pass
+                return 0, start_step_idx_touch, step # bad pass
             else:
                 if step // STEPS_PER_FRAME - start_step_idx_touch // STEPS_PER_FRAME < 1: # at least 2 frames
                     return -1, -1, -1
-                return 1, start_step_idx_touch // STEPS_PER_FRAME, step // STEPS_PER_FRAME # good pass
+                return 1, start_step_idx_touch, step # good pass
 
         return -1, -1, -1
