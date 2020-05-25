@@ -4,15 +4,22 @@ from sklearn.model_selection import train_test_split
 from absl import logging
 
 class ConfigsGeneration:
-    def __init__(self, dataset_path):
+    def __init__(self,
+                 dataset_name,
+                 dataset_path):
+        self._dataset_name = dataset_name
         self._dataset_path = dataset_path
         self._train_percentage = 0.90
 
-        self.cls_to_id = {
+        if self._dataset_name == 'video_recognition':
+            self.cls_to_id = {
                 'no_action': 0,
                 'pass': 1,
-                'shot': 2
-        }
+                'shot': 2}
+        elif self._dataset_name == 'expected_goals':
+            self.cls_to_id = {
+                '0': 0,
+                '1': 1}
 
         os.makedirs(os.path.join(self._dataset_path, 'configs'), exist_ok=True)
 

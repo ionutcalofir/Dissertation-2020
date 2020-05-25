@@ -43,7 +43,8 @@ def main(_):
         if FLAGS.configs_generation_dataset_path is None:
             logging.error('Please select the path to the dataset.')
             raise Exception('"configs_generation_dataset_path" flag is none!')
-        configs_generation = ConfigsGeneration(FLAGS.configs_generation_dataset_path)
+        configs_generation = ConfigsGeneration(FLAGS.dataset_generation_name,
+                                               FLAGS.configs_generation_dataset_path)
 
         configs_generation.generate()
 
