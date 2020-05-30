@@ -1,11 +1,13 @@
 import os
+import pickle
 import numpy as np
 import matplotlib.pyplot as plt
 from PIL import Image
 
 class Frames:
     def get_frame(self, frame_path):
-        frame = np.array(Image.open(frame_path))
+        with open(frame_path, 'rb') as f:
+            frame = pickle.load(f)
         return frame
 
     def get_frames_path(self, dump_path):
