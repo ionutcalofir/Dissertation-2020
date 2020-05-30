@@ -11,7 +11,7 @@ if not FLAGS.is_parsed():
     flags.DEFINE_enum('phase', None, ['generate_dataset', 'generate_configs'], 'Phase to run.')
 
     # DATASET GENERATION
-    flags.DEFINE_enum('dataset_generation_name', None, ['video_recognition', 'expected_goals', 'heatmap'], 'What dataset to generate.')
+    flags.DEFINE_enum('dataset_generation_name', None, ['video_recognition', 'expected_goals'], 'What dataset to generate.')
     flags.DEFINE_list('dataset_generation_video_recognition_classes', ['pass', 'shot'], 'What classes to generate for video recognition.')
     flags.DEFINE_string('dataset_generation_path', '/mnt/storage1/football_dataset/raw_dataset', 'Path to the raw dataset.')
     flags.DEFINE_string('dataset_generation_output_path', None, 'Path to the output dataset.')
