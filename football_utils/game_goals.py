@@ -65,11 +65,17 @@ class GameGoals:
                         else:
                             break
 
+                    if (team_id == 0 and observations['step_{}'.format(touch_step)]['ball']['position']['x'] < 0) \
+                            or (team_id == 1 and observations['step_{}'.format(touch_step)]['ball']['position']['x'] > 0):
+                        return -1, -1, -1
                     return 0, touch_step, step
                 else:
                     if is_goal_scored:
                         return 1, touch_step, step
                     else:
+                        if (team_id == 0 and observations['step_{}'.format(touch_step)]['ball']['position']['x'] < 0) \
+                                or (team_id == 1 and observations['step_{}'.format(touch_step)]['ball']['position']['x'] > 0):
+                            return -1, -1, -1
                         return 0, touch_step, step
 
         return -1, -1, -1
