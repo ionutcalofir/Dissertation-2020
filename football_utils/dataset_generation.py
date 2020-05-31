@@ -58,7 +58,10 @@ class DatasetGeneration:
         if left_action_type == -1 and right_action_type == -1:
             return -1, -1, -1
 
-        assert not (left_action_type != -1 and right_action_type != -1), '{} type is != -1 for both teams!'.format(action)
+        # assert not (left_action_type != -1 and right_action_type != -1), '{} type is != -1 for both teams!'.format(action)
+        if left_action_type != -1 and right_action_type != -1:
+            logging.warn('{} action is != -1 for both teams! Skipping this action!'.format(action))
+            return -1, -1, -1
 
         if left_action_type != -1:
             if left_action_type == 1:
@@ -176,6 +179,9 @@ class DatasetGeneration:
                                     or (start_frame <= frames_range[0] and frames_range[1] <= end_frame):
                                 is_ok = False
                                 break
+
+                        if end_frame - start_frame <= 2: # at least 3 frames
+                            is_ok = False
 
                         if is_ok:
                             examples_frames.append((start_frame, end_frame))

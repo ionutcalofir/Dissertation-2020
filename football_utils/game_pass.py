@@ -61,7 +61,7 @@ class GamePass:
                     return -1, -1, -1
                 return 0, touch_step, step # bad pass
             else:
-                if step // STEPS_PER_FRAME - touch_step // STEPS_PER_FRAME + 1 <= 3: # at least 3 frames
+                if step // STEPS_PER_FRAME - touch_step // STEPS_PER_FRAME + 1 <= 2: # at least 3 frames
                     return -1, -1, -1
                 return 1, touch_step, step # good pass
 
