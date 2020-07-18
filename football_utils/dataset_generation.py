@@ -80,11 +80,18 @@ class DatasetGeneration:
         if self._dataset_name == 'video_recognition':
             action_paths = {cls : os.path.join(self._dataset_output_path, cls) for cls in self._video_recognition_classes}
             action_paths['no_action'] = os.path.join(self._dataset_output_path, 'no_action')
+
+            action_observations_paths = {cls : os.path.join(self._dataset_output_path, 'observations', cls) for cls in self._video_recognition_classes}
+            action_observations_paths['no_action'] = os.path.join(self._dataset_output_path, 'observations', 'no_action')
         elif action == 'expected_goals':
             action_paths = {cls : os.path.join(self._dataset_output_path, cls) for cls in ['0', '1']}
+            action_observations_paths = {cls : os.path.join(self._dataset_output_path, 'observations', cls) for cls in ['0', '1']}
 
         for action_path in action_paths.values():
             os.makedirs(action_path, exist_ok=True)
+
+        for action_observations_path in action_observations_paths.values():
+            os.makedirs(action_observations_path, exist_ok=True)
 
         for dump_nr, dump_name in enumerate(sorted(os.listdir(self._dataset_path))):
             logging.info('Preprocess dump {} ({}/{})'.format(dump_name, dump_nr + 1, len(os.listdir(self._dataset_path))))
@@ -110,16 +117,20 @@ class DatasetGeneration:
                         if action_type == -1:
                             continue
 
-                        if action in ['pass', 'shot']:
-                            start_frame_idx = max(0, start_frame_idx // STEPS_PER_FRAME - 2) # -2 frame back for more information
-                            end_frame_idx = min(end_frame_idx // STEPS_PER_FRAME + 3, len(observations) // STEPS_PER_FRAME - 1) # +3 frame back for more information
+                        start_frame_idx = max(0, start_frame_idx // STEPS_PER_FRAME - 2) # -2 frame back for more information
+                        end_frame_idx = min(end_frame_idx // STEPS_PER_FRAME + 3, len(observations) // STEPS_PER_FRAME - 1) # +3 frame back for more information
+
+                        observations_frames = {}
+                        for step_frame in range(start_frame_idx * STEPS_PER_FRAME, end_frame_idx * STEPS_PER_FRAME):
+                            step_frame_name = 'step_{}'.format(step_frame)
+                            observations_frames[step_frame_name] = self._observations.get_observation(step_frame, observations)
 
                         if (action == 'shot') \
                                 and not (len(action_frames[action]) > 0 and start_frame_idx == action_frames[action][-1][0]):
-                            action_frames[action].append((start_frame_idx, end_frame_idx, ''))
+                            action_frames[action].append((start_frame_idx, end_frame_idx, '', observations_frames))
                         if (action == 'pass') \
                                 and not (len(action_frames[action]) > 0 and start_frame_idx == action_frames[action][-1][0]):
-                            action_frames[action].append((start_frame_idx, end_frame_idx, 'hard_pass' if action_type == 0 else ''))
+                            action_frames[action].append((start_frame_idx, end_frame_idx, 'hard_pass' if action_type == 0 else '', observations_frames))
                 elif action == 'expected_goals':
                     action_type, start_frame_idx, end_frame_idx = \
                         self._get_frame_action(step_idx, start_observation, observations, min(DATASET_GENERATION_FRAMES_WINDOW, len(observations) - 1 - step_idx), action=action)
@@ -139,11 +150,16 @@ class DatasetGeneration:
 
             def save_videos(i, action_frame, cls, num_examples, random_examples=False):
                 print('Preprocess class {} frames {}/{}'.format(cls, i + 1, num_examples))
-                video_path = os.path.join(action_paths[cls], '{}_video_{}'.format(dump_name, i + 1))
+                base_name = '{}_video_{}'.format(dump_name, i + 1)
                 if action_frame[2] != '':
-                    video_path += '_{}'.format(action_frame[2])
+                    base_name += '_{}'.format(action_frame[2])
+
+                video_path = os.path.join(action_paths[cls], base_name)
                 frames = [self._frames.get_frame(frames_path[frame]) for frame in range(action_frame[0], action_frame[1])]
                 self._video.dump_video(video_path, frames)
+
+                observations_path = os.path.join(action_observations_paths[cls], base_name)
+                self._observations.dump_observations(observations_path, action_frame[3])
 
             for cls in action_frames:
                 Parallel(n_jobs=-2)(delayed(save_videos)(i, action_frame, cls, len(action_frames[cls])) for i, action_frame in enumerate(action_frames[cls]))
@@ -181,7 +197,12 @@ class DatasetGeneration:
                             is_ok = False
 
                         if is_ok:
-                            examples_frames.append((start_frame, end_frame, ''))
+                            observations_frames = {}
+                            for step_frame in range(start_frame * STEPS_PER_FRAME, end_frame * STEPS_PER_FRAME):
+                                step_frame_name = 'step_{}'.format(step_frame)
+                                observations_frames[step_frame_name] = self._observations.get_observation(step_frame, observations)
+
+                            examples_frames.append((start_frame, end_frame, '', observations_frames))
                             break
                 logging.info('Generated examples {}/{} for `no_action` class!'.format(len(examples_frames), num_examples))
 

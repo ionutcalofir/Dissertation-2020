@@ -12,3 +12,6 @@ class Observations:
 
     def get_frame_name(self, step_idx, observations):
         return int(observations['step_{}'.format(step_idx)]['frame_name'].split('_')[-1])
+
+    def dump_observations(self, observations_path, observations):
+        json.dump(observations, open('{}.json'.format(observations_path), 'w'))
