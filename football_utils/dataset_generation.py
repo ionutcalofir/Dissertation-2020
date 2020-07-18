@@ -114,15 +114,12 @@ class DatasetGeneration:
                             start_frame_idx = max(0, start_frame_idx // STEPS_PER_FRAME - 2) # -2 frame back for more information
                             end_frame_idx = min(end_frame_idx // STEPS_PER_FRAME + 3, len(observations) // STEPS_PER_FRAME - 1) # +3 frame back for more information
 
-                        if ((action_type == 1) or (action_type == 0 and action == 'shot')) \
+                        if (action == 'shot') \
                                 and not (len(action_frames[action]) > 0 and start_frame_idx == action_frames[action][-1][0]):
-                            action_frames[action].append((start_frame_idx, end_frame_idx))
-
-                        # For `pass` action hard negative examples will be provided. (When a player
-                        # performs a pass, but the ball is intercepted by the other team)
-                        if action == 'pass' and action_type == 0 \
-                                and not (len(action_frames['no_action']) > 0 and start_frame_idx == action_frames['no_action'][-1][0]):
-                            action_frames['no_action'].append((start_frame_idx, end_frame_idx))
+                            action_frames[action].append((start_frame_idx, end_frame_idx, ''))
+                        if (action == 'pass') \
+                                and not (len(action_frames[action]) > 0 and start_frame_idx == action_frames[action][-1][0]):
+                            action_frames[action].append((start_frame_idx, end_frame_idx, 'hard_pass' if action_type == 0 else ''))
                 elif action == 'expected_goals':
                     action_type, start_frame_idx, end_frame_idx = \
                         self._get_frame_action(step_idx, start_observation, observations, min(DATASET_GENERATION_FRAMES_WINDOW, len(observations) - 1 - step_idx), action=action)
@@ -135,16 +132,16 @@ class DatasetGeneration:
 
                     if action_type == 0 \
                             and not (len(action_frames['0']) > 0 and start_frame_idx == action_frames['0'][-1][0]):
-                        action_frames['0'].append((start_frame_idx, end_frame_idx))
+                        action_frames['0'].append((start_frame_idx, end_frame_idx, ''))
                     elif action_type == 1 \
                             and not (len(action_frames['1']) > 0 and start_frame_idx == action_frames['1'][-1][0]):
-                        action_frames['1'].append((start_frame_idx, end_frame_idx))
+                        action_frames['1'].append((start_frame_idx, end_frame_idx, ''))
 
             def save_videos(i, action_frame, cls, num_examples, random_examples=False):
                 print('Preprocess class {} frames {}/{}'.format(cls, i + 1, num_examples))
                 video_path = os.path.join(action_paths[cls], '{}_video_{}'.format(dump_name, i + 1))
-                if cls == 'no_action' and self._dataset_name == 'video_recognition' and not random_examples:
-                    video_path += '_hard_pass'
+                if action_frame[2] != '':
+                    video_path += '_{}'.format(action_frame[2])
                 frames = [self._frames.get_frame(frames_path[frame]) for frame in range(action_frame[0], action_frame[1])]
                 self._video.dump_video(video_path, frames)
 
@@ -184,7 +181,7 @@ class DatasetGeneration:
                             is_ok = False
 
                         if is_ok:
-                            examples_frames.append((start_frame, end_frame))
+                            examples_frames.append((start_frame, end_frame, ''))
                             break
                 logging.info('Generated examples {}/{} for `no_action` class!'.format(len(examples_frames), num_examples))
 
