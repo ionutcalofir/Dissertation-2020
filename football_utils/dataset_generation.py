@@ -141,12 +141,17 @@ class DatasetGeneration:
                     end_frame_idx = start_frame_idx // STEPS_PER_FRAME # it stops right when the player performs the shot (start_frame_idx is not put there by mistake)
                     start_frame_idx = max(0, start_frame_idx // STEPS_PER_FRAME - 20) # -20 frames back before the player performs the shot
 
+                    observations_frames = {}
+                    for step_frame in range(start_frame_idx * STEPS_PER_FRAME, end_frame_idx * STEPS_PER_FRAME):
+                        step_frame_name = 'step_{}'.format(step_frame)
+                        observations_frames[step_frame_name] = self._observations.get_observation(step_frame, observations)
+
                     if action_type == 0 \
                             and not (len(action_frames['0']) > 0 and start_frame_idx == action_frames['0'][-1][0]):
-                        action_frames['0'].append((start_frame_idx, end_frame_idx, ''))
+                        action_frames['0'].append((start_frame_idx, end_frame_idx, '', observations_frames))
                     elif action_type == 1 \
                             and not (len(action_frames['1']) > 0 and start_frame_idx == action_frames['1'][-1][0]):
-                        action_frames['1'].append((start_frame_idx, end_frame_idx, ''))
+                        action_frames['1'].append((start_frame_idx, end_frame_idx, '', observations_frames))
 
             def save_videos(i, action_frame, cls, num_examples, random_examples=False):
                 print('Preprocess class {} frames {}/{}'.format(cls, i + 1, num_examples))
