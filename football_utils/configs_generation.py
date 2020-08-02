@@ -35,7 +35,7 @@ class ConfigsGeneration:
         X = []
         y = []
 
-        classes = sorted([cls for cls in os.listdir(self._dataset_path) if cls != 'configs'])
+        classes = sorted([cls for cls in os.listdir(self._dataset_path) if cls not in ['configs', 'observations']])
 
         for cls in classes:
             cls_path = os.path.join(self._dataset_path, cls)
