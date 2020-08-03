@@ -31,6 +31,19 @@ class ConfigsGeneration:
             for cls, cls_id in self.cls_to_id.items():
                 logging.info('{} {} num examples: {}'.format(mode.title(), cls, np.sum(y == cls_id)))
 
+    def _write_class_weights(self, y_train):
+        """
+        Formula from https://scikit-learn.org/stable/modules/generated/sklearn.svm.SVC.html. (see class_weight)
+
+        n_samples / (n_classes * np.bincount(y))
+        """
+        with open(os.path.join(self._dataset_path, 'configs', 'class_weights.txt'), 'w') as f:
+            n_samples = y_train.shape[0]
+            n_classes = np.amax(y_train) + 1
+
+            class_weights = n_samples / (n_classes * np.bincount(y_train))
+            f.write('{}'.format(class_weights))
+
     def generate(self):
         X = []
         y = []
@@ -57,6 +70,8 @@ class ConfigsGeneration:
                                                         test_size=0.5,
                                                         random_state=42,
                                                         stratify=y_valtest)
+
+        self._write_class_weights(y_train)
 
         self._write_csv(X_train, y_train, mode='train')
         self._write_csv(X_val, y_val, mode='val')
