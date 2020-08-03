@@ -42,7 +42,8 @@ class ConfigsGeneration:
             n_classes = np.amax(y_train) + 1
 
             class_weights = n_samples / (n_classes * np.bincount(y_train))
-            f.write('{}'.format(class_weights))
+            class_weights = [str(round(class_weight, 2)) for class_weight in class_weights]
+            f.write('[{}]'.format(','.join(class_weights)))
 
     def generate(self):
         X = []
