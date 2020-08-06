@@ -186,15 +186,13 @@ class DatasetGeneration:
 
                         is_ok = True
                         for frames_range in all_frames:
-                            if (frames_range[0] <= start_frame and start_frame <= frames_range[1]) \
-                                    or (frames_range[0] <= end_frame and end_frame <= frames_range[1]) \
-                                    or (start_frame <= frames_range[0] and frames_range[1] <= end_frame):
+                            if (frames_range[0] - 5 <= start_frame and start_frame <= frames_range[0] + 5) \
+                                    or (frames_range[1] - 5 <= end_frame and end_frame <= frames_range[1] + 5):
                                 is_ok = False
                                 break
                         for frames_range in examples_frames:
-                            if (frames_range[0] <= start_frame and start_frame <= frames_range[1]) \
-                                    or (frames_range[0] <= end_frame and end_frame <= frames_range[1]) \
-                                    or (start_frame <= frames_range[0] and frames_range[1] <= end_frame):
+                            if (frames_range[0] - 5 <= start_frame and start_frame <= frames_range[0] + 5) \
+                                    or (frames_range[1] - 5 <= end_frame and end_frame <= frames_range[1] + 5):
                                 is_ok = False
                                 break
 
