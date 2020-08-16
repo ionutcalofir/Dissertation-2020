@@ -38,42 +38,6 @@ class DatasetGeneration:
         self._goals = GameGoals()
         self._video = Video(self._downscale_videos)
 
-    def _get_frame_action(self, step_idx, start_observation, observations, num_steps, action):
-        # left/right_action_type = -1 - no action
-        # left/right_action_type = 0 - negative example of action
-        # left/right_action_type = 1 - positive example of action
-        if action == 'pass':
-            left_action_type, left_team_start_frame_idx, left_team_end_frame_idx = \
-                self._pass.get_frame_pass('left_team', step_idx, start_observation, observations, num_steps)
-            right_action_type, right_team_start_frame_idx, right_team_end_frame_idx = \
-                self._pass.get_frame_pass('right_team', step_idx, start_observation, observations, num_steps)
-        elif action in ['expected_goals', 'shot']:
-            left_action_type, left_team_start_frame_idx, left_team_end_frame_idx = \
-                self._goals.get_frame_goal('left_team', step_idx, start_observation, observations, num_steps)
-            right_action_type, right_team_start_frame_idx, right_team_end_frame_idx = \
-                self._goals.get_frame_goal('right_team', step_idx, start_observation, observations, num_steps)
-        else:
-            raise Exception('Action {} is unknown!'.format(action))
-
-        if left_action_type == -1 and right_action_type == -1:
-            return -1, -1, -1
-
-        # assert not (left_action_type != -1 and right_action_type != -1), '{} type is != -1 for both teams!'.format(action)
-        if left_action_type != -1 and right_action_type != -1:
-            logging.warn('{} action is != -1 for both teams! Skipping this action!'.format(action))
-            return -1, -1, -1
-
-        if left_action_type != -1:
-            if left_action_type == 1:
-                return 1, left_team_start_frame_idx, left_team_end_frame_idx
-            else:
-                return 0, left_team_start_frame_idx, left_team_end_frame_idx
-        else:
-            if right_action_type == 1:
-                return 1, right_team_start_frame_idx, right_team_end_frame_idx
-            else:
-                return 0, right_team_start_frame_idx, right_team_end_frame_idx
-
     def _generate_dataset_action(self, action):
         os.makedirs(self._dataset_output_path, exist_ok=True)
 
@@ -112,7 +76,8 @@ class DatasetGeneration:
                 if self._dataset_name == 'video_recognition':
                     for action in self._video_recognition_classes:
                         action_type, start_frame_idx, end_frame_idx = \
-                            self._get_frame_action(step_idx, start_observation, observations, min(DATASET_GENERATION_FRAMES_WINDOW, len(observations) - 1 - step_idx), action=action)
+                            self._game_engine.get_frame_action(step_idx, start_observation, observations, min(DATASET_GENERATION_FRAMES_WINDOW, len(observations) - 1 - step_idx),
+                                                               action=action, pass_object=self._pass, goals_object=self._goals)
 
                         if action_type == -1:
                             continue
@@ -133,7 +98,8 @@ class DatasetGeneration:
                             action_frames[action].append((start_frame_idx, end_frame_idx, 'hard_pass' if action_type == 0 else '', observations_frames))
                 elif action == 'expected_goals':
                     action_type, start_frame_idx, end_frame_idx = \
-                        self._get_frame_action(step_idx, start_observation, observations, min(DATASET_GENERATION_FRAMES_WINDOW, len(observations) - 1 - step_idx), action=action)
+                        self._game_engine.get_frame_action(step_idx, start_observation, observations, min(DATASET_GENERATION_FRAMES_WINDOW, len(observations) - 1 - step_idx),
+                                                           action=action, pass_object=self._pass, goals_object=self._goals)
 
                     if action_type == -1:
                         continue
@@ -153,7 +119,7 @@ class DatasetGeneration:
                             and not (len(action_frames['1']) > 0 and start_frame_idx == action_frames['1'][-1][0]):
                         action_frames['1'].append((start_frame_idx, end_frame_idx, '', observations_frames))
 
-            def save_videos(i, action_frame, cls, num_examples, random_examples=False):
+            def save_videos(i, action_frame, cls, num_examples):
                 print('Preprocess class {} frames {}/{}'.format(cls, i + 1, num_examples))
                 base_name = '{}_video_{}'.format(dump_name, i + 1)
                 if action_frame[2] != '':
@@ -209,7 +175,7 @@ class DatasetGeneration:
                             break
                 logging.info('Generated examples {}/{} for `no_action` class!'.format(len(examples_frames), num_examples))
 
-                Parallel(n_jobs=-2)(delayed(save_videos)(i, action_frame, 'no_action', len(examples_frames), random_examples=True) for i, action_frame in enumerate(examples_frames))
+                Parallel(n_jobs=-2)(delayed(save_videos)(i, action_frame, 'no_action', len(examples_frames)) for i, action_frame in enumerate(examples_frames))
 
             logging.info('Done!\n')
 
