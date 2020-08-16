@@ -4,11 +4,12 @@ from absl import logging
 
 from football_utils.dataset_generation import DatasetGeneration
 from football_utils.configs_generation import ConfigsGeneration
+from football_utils.game_generation import GameGeneration
 
 FLAGS = flags.FLAGS
 
 if not FLAGS.is_parsed():
-    flags.DEFINE_enum('phase', None, ['generate_dataset', 'generate_configs'], 'Phase to run.')
+    flags.DEFINE_enum('phase', None, ['generate_dataset', 'generate_configs', 'generate_game'], 'Phase to run.')
 
     # DATASET GENERATION
     flags.DEFINE_enum('dataset_generation_name', None, ['video_recognition', 'expected_goals'], 'What dataset to generate.')
@@ -47,6 +48,11 @@ def main(_):
                                                FLAGS.configs_generation_dataset_path)
 
         configs_generation.generate()
+    elif FLAGS.phase == 'generate_game':
+        game_generation = GameGeneration(FLAGS.dataset_generation_path,
+                                         FLAGS.dataset_generation_output_path,
+                                         FLAGS.dataset_generation_downscale_videos)
+        game_generation.generate()
 
     logging.info('Done!')
 
