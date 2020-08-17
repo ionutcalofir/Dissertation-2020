@@ -133,7 +133,7 @@ class GameGeneration:
 
             with open(sliding_window_videos_information_path + '/sliding_window_videos_information.json', 'w') as f:
                 json.dump(information_sliding_window_frames, f)
-            with open(sliding_window_videos_information_path + '/sliding_window_config.txt', 'w') as f:
+            with open(sliding_window_videos_information_path + '/test.csv', 'w') as f:
                 for sliding_window_video_name in sliding_window_config:
                     f.write('sliding_window_videos/{}.avi {}\n'.format(sliding_window_video_name, -1))
 
