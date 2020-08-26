@@ -35,6 +35,9 @@ class HighlightDetection():
             if prediction_idx == 0:
                 continue
 
+            if start_frame_idx > 1000:
+                continue
+
             predictions_x.append(start_frame_idx)
             predictions_y.append(prediction[prediction_idx])
             predictions_colors.append('b' if prediction_idx == 2 else 'g')
@@ -46,7 +49,7 @@ class HighlightDetection():
             action_name = self._actions[frame]['action_name']
             frame_idx = int(frame.split('_')[-1])
 
-            if frame_idx > 500:
+            if frame_idx > 1000:
                 continue
 
             gt_x.append(frame_idx)
@@ -67,4 +70,3 @@ class HighlightDetection():
                                   markerfacecolor='b', markersize=5)]
         ax.legend(handles=legend_elements)
         plt.show()
-        import ipdb; ipdb.set_trace()
