@@ -2,6 +2,7 @@ from absl import flags
 from absl import app
 from absl import logging
 
+from football_utils.stats import Stats
 from football_utils.dataset_generation import DatasetGeneration
 from football_utils.configs_generation import ConfigsGeneration
 from football_utils.game_generation import GameGeneration
@@ -10,7 +11,11 @@ from football_utils.highlight_detection import HighlightDetection
 FLAGS = flags.FLAGS
 
 if not FLAGS.is_parsed():
-    flags.DEFINE_enum('phase', None, ['generate_dataset', 'generate_configs', 'generate_game', 'highlight_detection'], 'Phase to run.')
+    flags.DEFINE_enum('phase', None, ['generate_dataset',
+                                      'generate_configs',
+                                      'generate_game',
+                                      'highlight_detection',
+                                      'stats'], 'Phase to run.')
 
     # DATASET GENERATION
     flags.DEFINE_enum('dataset_generation_name', None, ['video_recognition', 'expected_goals'], 'What dataset to generate.')
@@ -24,6 +29,9 @@ if not FLAGS.is_parsed():
 
     # HIGHLIGHT DETECTION
     flags.DEFINE_string('highlight_detection_game_path', None, 'Path to the game.')
+
+    # STATS
+    flags.DEFINE_string('stats_dataset_path', None, 'Path to the dataset.')
 
 def main(_):
     if FLAGS.phase is None:
@@ -60,6 +68,9 @@ def main(_):
     elif FLAGS.phase == 'highlight_detection':
         ob = HighlightDetection(FLAGS.highlight_detection_game_path)
         ob.highlight()
+    elif FLAGS.phase == 'stats':
+        ob = Stats(FLAGS.stats_dataset_path)
+        ob.compute_stats()
 
     logging.info('Done!')
 
