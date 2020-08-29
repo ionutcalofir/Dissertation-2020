@@ -22,7 +22,7 @@ class GameGeneration:
         self._downscale_videos = downscale_videos
 
         self._sliding_window_frames_stride = 5
-        self._sliding_window_frames_length = 20
+        self._sliding_window_frames_lengths = [10, 15, 20]
 
         self._observations = Observations()
         self._frames = Frames()
@@ -107,42 +107,49 @@ class GameGeneration:
             for cls in action_frames:
                 Parallel(n_jobs=-2)(delayed(save_videos)(i, action_frame, cls, len(action_frames[cls])) for i, action_frame in enumerate(action_frames[cls]))
 
+            root_sliding_window_videos_path = os.path.join(game_path, 'sliding_window_videos')
 
-            sliding_window_videos_path = os.path.join(game_path, 'sliding_window_videos')
-            os.makedirs(sliding_window_videos_path)
-            sliding_window_videos_information_path = sliding_window_videos_path + '_information'
-            os.makedirs(sliding_window_videos_information_path)
+            for sliding_window_frames_length in self._sliding_window_frames_lengths:
+                print('Preprocess sliding window frames length {}'.format(sliding_window_frames_length))
+                sliding_window_videos_path = os.path.join(root_sliding_window_videos_path, 'sliding_window_videos')
+                sliding_window_videos_information_path = sliding_window_videos_path + '_information'
 
-            sliding_window_config = []
-            sliding_window_frames = []
-            information_sliding_window_frames = {}
-            for idx in range(0, len(frames_path), self._sliding_window_frames_stride):
-                start_frame_idx = idx
-                end_frame_idx = min(idx + self._sliding_window_frames_length, len(frames_path))
+                sliding_window_videos_path = sliding_window_videos_path + '_length_{}'.format(sliding_window_frames_length)
+                sliding_window_videos_information_path = sliding_window_videos_information_path + '_length_{}'.format(sliding_window_frames_length)
 
-                sliding_window_frames.append((start_frame_idx, end_frame_idx))
-                sliding_window_video_name = 'sliding_window_{}_{}'.format(start_frame_idx, len(sliding_window_frames))
-                sliding_window_config.append(sliding_window_video_name)
+                os.makedirs(sliding_window_videos_path)
+                os.makedirs(sliding_window_videos_information_path)
 
-                information_sliding_window_frames[sliding_window_video_name] = {}
-                information_sliding_window_frames[sliding_window_video_name]['start_frame_idx'] = start_frame_idx
-                information_sliding_window_frames[sliding_window_video_name]['end_frame_idx'] = end_frame_idx
+                sliding_window_config = []
+                sliding_window_frames = []
+                information_sliding_window_frames = {}
+                for idx in range(0, len(frames_path), self._sliding_window_frames_stride):
+                    start_frame_idx = idx
+                    end_frame_idx = min(idx + sliding_window_frames_length, len(frames_path))
 
-                if idx + self._sliding_window_frames_length >= len(frames_path):
-                    break
+                    sliding_window_frames.append((start_frame_idx, end_frame_idx))
+                    sliding_window_video_name = 'sliding_window_{}_{}'.format(start_frame_idx, len(sliding_window_frames))
+                    sliding_window_config.append(sliding_window_video_name)
 
-            with open(sliding_window_videos_information_path + '/sliding_window_videos_information.json', 'w') as f:
-                json.dump(information_sliding_window_frames, f)
-            with open(sliding_window_videos_information_path + '/test.csv', 'w') as f:
-                for sliding_window_video_name in sliding_window_config:
-                    f.write('sliding_window_videos/{}.avi {}\n'.format(sliding_window_video_name, -1))
+                    information_sliding_window_frames[sliding_window_video_name] = {}
+                    information_sliding_window_frames[sliding_window_video_name]['start_frame_idx'] = start_frame_idx
+                    information_sliding_window_frames[sliding_window_video_name]['end_frame_idx'] = end_frame_idx
 
-            def save_videos_sliding_window(i, sliding_window_frame, num_examples):
-                print('Preprocess frames {}/{}'.format(i + 1, num_examples))
-                base_name = 'sliding_window_{}_{}'.format(sliding_window_frame[0], i + 1)
+                    if idx + sliding_window_frames_length >= len(frames_path):
+                        break
 
-                video_path = os.path.join(sliding_window_videos_path, base_name)
-                frames = [self._frames.get_frame(frames_path[frame]) for frame in range(sliding_window_frame[0], sliding_window_frame[1])]
-                self._video.dump_video(video_path, frames)
+                with open(sliding_window_videos_information_path + '/sliding_window_videos_information.json', 'w') as f:
+                    json.dump(information_sliding_window_frames, f)
+                with open(sliding_window_videos_information_path + '/test.csv', 'w') as f:
+                    for sliding_window_video_name in sliding_window_config:
+                        f.write('sliding_window_videos/{}.avi {}\n'.format(sliding_window_video_name, -1))
 
-            Parallel(n_jobs=-2)(delayed(save_videos_sliding_window)(i, sliding_window_frame, len(sliding_window_frames)) for i, sliding_window_frame in enumerate(sliding_window_frames))
+                def save_videos_sliding_window(i, sliding_window_frame, num_examples):
+                    print('Preprocess frames {}/{}'.format(i + 1, num_examples))
+                    base_name = 'sliding_window_{}_{}'.format(sliding_window_frame[0], i + 1)
+
+                    video_path = os.path.join(sliding_window_videos_path, base_name)
+                    frames = [self._frames.get_frame(frames_path[frame]) for frame in range(sliding_window_frame[0], sliding_window_frame[1])]
+                    self._video.dump_video(video_path, frames)
+
+                Parallel(n_jobs=-2)(delayed(save_videos_sliding_window)(i, sliding_window_frame, len(sliding_window_frames)) for i, sliding_window_frame in enumerate(sliding_window_frames))
