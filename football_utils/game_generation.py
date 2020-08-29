@@ -21,7 +21,7 @@ class GameGeneration:
         self._dataset_output_path = dataset_output_path
         self._downscale_videos = downscale_videos
 
-        self._sliding_window_frames_stride = 5
+        self._sliding_window_frames_stride = 1
         self._sliding_window_frames_lengths = [10, 15, 20]
 
         self._observations = Observations()
@@ -142,7 +142,7 @@ class GameGeneration:
                     json.dump(information_sliding_window_frames, f)
                 with open(sliding_window_videos_information_path + '/test.csv', 'w') as f:
                     for sliding_window_video_name in sliding_window_config:
-                        f.write('sliding_window_videos/{}.avi {}\n'.format(sliding_window_video_name, -1))
+                        f.write('sliding_window_videos/sliding_window_videos_length_{}/{}.avi {}\n'.format(sliding_window_frames_length, sliding_window_video_name, -1))
 
                 def save_videos_sliding_window(i, sliding_window_frame, num_examples):
                     print('Preprocess frames {}/{}'.format(i + 1, num_examples))
