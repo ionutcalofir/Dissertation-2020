@@ -93,6 +93,9 @@ class GameGeneration:
                         if action == 'pass' and action_type == 1:
                             information_action_frames[action][start_frame_idx]['is_good_pass'] = True
 
+            with open(os.path.join(ground_truth_videos_path_observations, 'ground_truth_videos_information.json'), 'w') as f:
+                json.dump(information_action_frames, f)
+
             def save_videos(i, action_frame, cls, num_examples):
                 print('Preprocess class {} frames {}/{}'.format(cls, i + 1, num_examples))
                 base_name = 'video_{}_{}'.format(cls, action_frame[0])
@@ -134,6 +137,7 @@ class GameGeneration:
                     information_sliding_window_frames[sliding_window_video_name] = {}
                     information_sliding_window_frames[sliding_window_video_name]['start_frame_idx'] = start_frame_idx
                     information_sliding_window_frames[sliding_window_video_name]['end_frame_idx'] = end_frame_idx
+                    information_sliding_window_frames[sliding_window_video_name]['football_observation'] = self._observations.get_observation(start_frame_idx * 10, observations)
 
                     if idx + sliding_window_frames_length >= len(frames_path):
                         break
