@@ -22,7 +22,7 @@ class GameGeneration:
         self._downscale_videos = downscale_videos
 
         self._sliding_window_frames_stride = 1
-        self._sliding_window_frames_lengths = [10, 15, 20]
+        self._sliding_window_frames_lengths = [-1, 10, 15, 20] # -1 is for expected goals
 
         self._observations = Observations()
         self._frames = Frames()
@@ -117,8 +117,12 @@ class GameGeneration:
                 sliding_window_videos_path = os.path.join(root_sliding_window_videos_path, 'sliding_window_videos')
                 sliding_window_videos_information_path = sliding_window_videos_path + '_information'
 
-                sliding_window_videos_path = sliding_window_videos_path + '_length_{}'.format(sliding_window_frames_length)
-                sliding_window_videos_information_path = sliding_window_videos_information_path + '_length_{}'.format(sliding_window_frames_length)
+                if sliding_window_frames_length == -1:
+                    sliding_window_videos_path = sliding_window_videos_path + '_expected_goals'
+                    sliding_window_videos_information_path = sliding_window_videos_information_path + '_expected_goals'
+                else:
+                    sliding_window_videos_path = sliding_window_videos_path + '_length_{}'.format(sliding_window_frames_length)
+                    sliding_window_videos_information_path = sliding_window_videos_information_path + '_length_{}'.format(sliding_window_frames_length)
 
                 os.makedirs(sliding_window_videos_path)
                 os.makedirs(sliding_window_videos_information_path)
@@ -127,8 +131,12 @@ class GameGeneration:
                 sliding_window_frames = []
                 information_sliding_window_frames = {}
                 for idx in range(0, len(frames_path), self._sliding_window_frames_stride):
-                    start_frame_idx = idx
-                    end_frame_idx = min(idx + sliding_window_frames_length, len(frames_path))
+                    if sliding_window_frames_length == -1:
+                        end_frame_idx = idx
+                        start_frame_idx = max(0, end_frame_idx - 20)
+                    else:
+                        start_frame_idx = idx
+                        end_frame_idx = min(idx + sliding_window_frames_length, len(frames_path))
 
                     sliding_window_frames.append((start_frame_idx, end_frame_idx))
                     sliding_window_video_name = 'sliding_window_{}_{}'.format(start_frame_idx, len(sliding_window_frames))
@@ -139,14 +147,12 @@ class GameGeneration:
                     information_sliding_window_frames[sliding_window_video_name]['end_frame_idx'] = end_frame_idx
                     information_sliding_window_frames[sliding_window_video_name]['football_observation'] = self._observations.get_observation(start_frame_idx * 10, observations)
 
-                    if idx + sliding_window_frames_length >= len(frames_path):
-                        break
-
                 with open(sliding_window_videos_information_path + '/sliding_window_videos_information.json', 'w') as f:
                     json.dump(information_sliding_window_frames, f)
-                with open(sliding_window_videos_information_path + '/test.csv', 'w') as f:
-                    for sliding_window_video_name in sliding_window_config:
-                        f.write('sliding_window_videos/sliding_window_videos_length_{}/{}.avi {}\n'.format(sliding_window_frames_length, sliding_window_video_name, -1))
+                if sliding_window_frames_length != -1:
+                    with open(sliding_window_videos_information_path + '/test.csv', 'w') as f:
+                        for sliding_window_video_name in sliding_window_config:
+                            f.write('sliding_window_videos/sliding_window_videos_length_{}/{}.avi {}\n'.format(sliding_window_frames_length, sliding_window_video_name, -1))
 
                 def save_videos_sliding_window(i, sliding_window_frame, num_examples):
                     print('Preprocess frames {}/{}'.format(i + 1, num_examples))
