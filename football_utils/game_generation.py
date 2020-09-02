@@ -110,6 +110,12 @@ class GameGeneration:
             for cls in action_frames:
                 Parallel(n_jobs=-2)(delayed(save_videos)(i, action_frame, cls, len(action_frames[cls])) for i, action_frame in enumerate(action_frames[cls]))
 
+            football_observations = {}
+            for start_frame_idx in range(0, len(observations) // 10):
+                football_observations['frame_{}'.format(start_frame_idx)] = self._observations.get_observation(start_frame_idx * 10, observations)
+            with open(os.path.join(game_path, 'football_observations.json'), 'w') as f:
+                json.dump(football_observations, f)
+
             root_sliding_window_videos_path = os.path.join(game_path, 'sliding_window_videos')
 
             for sliding_window_frames_length in self._sliding_window_frames_lengths:
@@ -145,7 +151,6 @@ class GameGeneration:
                     information_sliding_window_frames[sliding_window_video_name] = {}
                     information_sliding_window_frames[sliding_window_video_name]['start_frame_idx'] = start_frame_idx
                     information_sliding_window_frames[sliding_window_video_name]['end_frame_idx'] = end_frame_idx
-                    information_sliding_window_frames[sliding_window_video_name]['football_observation'] = self._observations.get_observation(start_frame_idx * 10, observations)
 
                 with open(sliding_window_videos_information_path + '/sliding_window_videos_information.json', 'w') as f:
                     json.dump(information_sliding_window_frames, f)
