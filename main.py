@@ -29,6 +29,7 @@ if not FLAGS.is_parsed():
 
     # HIGHLIGHT DETECTION
     flags.DEFINE_string('highlight_detection_game_path', None, 'Path to the game.')
+    flags.DEFINE_integer('highlight_detection_window_length', None, 'Length of the sliding window')
 
     # STATS
     flags.DEFINE_string('stats_dataset_path', None, 'Path to the dataset.')
@@ -66,8 +67,10 @@ def main(_):
                                          FLAGS.dataset_generation_downscale_videos)
         game_generation.generate()
     elif FLAGS.phase == 'highlight_detection':
-        ob = HighlightDetection(FLAGS.highlight_detection_game_path)
-        ob.highlight()
+        ob = HighlightDetection(FLAGS.highlight_detection_game_path,
+                                FLAGS.highlight_detection_window_length)
+        # ob.compute_expected_goals()
+        ob.plot_expected_goals()
     elif FLAGS.phase == 'stats':
         ob = Stats(FLAGS.stats_dataset_path)
         ob.compute_stats()
