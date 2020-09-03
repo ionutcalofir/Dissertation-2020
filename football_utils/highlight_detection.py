@@ -29,6 +29,38 @@ class HighlightDetection():
             self._actions['frame_{}'.format(frame)]['action_name'] = action_name
             self._actions['frame_{}'.format(frame)]['path'] = os.path.join(game_path, 'gt_videos', action)
 
+        # 1 - pass
+        # 2 - shot
+        # These values are computed on a validation set and used for the test set.
+        self._w_class = {1: 15,
+                         2: 10}
+        self._th_class = {1: 0.90,
+                          2: 0.90}
+
+    def _show_plot(self, gts, predictions):
+        gts_x = [gt[0] for gt in gts]
+        gts_y = [1] * len(gts_x)
+        gts_color = ['b' if gt[1] == 2 else 'g' for gt in gts]
+
+        preds_x = [pred[0] for pred in predictions]
+        preds_y = [pred[2] for pred in predictions]
+        preds_color = ['b' if pred[1] == 2 else 'g' for pred in predictions]
+
+        dot_x = np.linspace(min(gts_x) - 100, max(gts_x) + 100).tolist()
+        dot_y = [1] * len(dot_x)
+
+        fig, ax = plt.subplots(figsize=(15, 15))
+        ax.plot(dot_x, dot_y, color='k', linestyle='dashed')
+        ax.scatter(preds_x, preds_y, c=preds_color)
+        ax.scatter(gts_x, gts_y, c=gts_color)
+
+        legend_elements = [Line2D([0], [0], marker='o', color='w', label='Pass',
+                                  markerfacecolor='g', markersize=5),
+                           Line2D([0], [0], marker='o', color='w', label='Shot',
+                                  markerfacecolor='b', markersize=5)]
+        ax.legend(handles=legend_elements)
+        plt.show()
+
     def _apply_nms_class(self, gts, predictions, class_name, w_class, th_class):
         # Apply threshold
         predictions = [pred for pred in predictions if pred[2] >= th_class]
@@ -63,19 +95,20 @@ class HighlightDetection():
 
         return predictions_nms
 
-    def _apply_nms(self, gts, predictions):
+    def _apply_nms(self, gts, predictions, w_class=None, th_class=None):
+        if w_class is None and th_class is None: # testing case
+            w_class = self._w_class
+            th_class = self._th_class
+
         predictions_nms = []
         for class_name in [1, 2]:
             gts_class = [gt for gt in gts if gt[1] == class_name]
             predictions_class = [pred for pred in predictions if pred[1] == class_name]
 
-            w_class = 15
-            th_class = 0.90
-            if class_name == 'shot':
-                w_class = 10
-                th_class = 0.90
+            w_class_value = w_class[class_name]
+            th_class_value = th_class[class_name]
 
-            predictions_class_nms = self._apply_nms_class(gts_class, predictions_class, class_name, w_class, th_class)
+            predictions_class_nms = self._apply_nms_class(gts_class, predictions_class, class_name, w_class_value, th_class_value)
             predictions_nms.extend(predictions_class_nms)
 
         predictions_nms.sort(key=lambda x: x[0])
@@ -101,19 +134,15 @@ class HighlightDetection():
             gts.append((frame_idx, 1 if action_name == 'pass' else 2))
         gts.sort(key=lambda x: x[0])
 
-        predictions_nms = self._apply_nms(gts, predictions)
-
-        # self.show_plot(gts, predictions)
-        # self.show_plot(gts, predictions_nms)
-
-        return predictions_nms
+        return gts, predictions
 
     def compute_expected_goals(self):
         # predictions for expected goals
         prefix = 'sliding_window_videos/sliding_window_videos_expected_goals'
         output_dir = os.path.join(self._game_path, 'sliding_window_videos/sliding_window_videos_information_expected_goals')
 
-        predictions_nms = self._compute_predictions()
+        gts, predictions = self._compute_predictions()
+        predictions_nms = self._apply_nms(gts, predictions)
         predictions_nms = [pred for pred in predictions_nms if pred[1] == 2]
 
         with open(os.path.join(output_dir, 'test.csv'), 'w') as f:
@@ -203,26 +232,20 @@ class HighlightDetection():
 
         plt.show()
 
-    def show_plot(self, gts, predictions):
-        gts_x = [gt[0] for gt in gts]
-        gts_y = [1] * len(gts_x)
-        gts_color = ['b' if gt[1] == 2 else 'g' for gt in gts]
+    def show_highlight(self):
+        gts, predictions = self._compute_predictions()
+        predictions_nms = self._apply_nms(gts, predictions)
 
-        preds_x = [pred[0] for pred in predictions]
-        preds_y = [pred[2] for pred in predictions]
-        preds_color = ['b' if pred[1] == 2 else 'g' for pred in predictions]
+        self._show_plot(gts, predictions)
+        self._show_plot(gts, predictions_nms)
 
-        dot_x = np.linspace(min(gts_x) - 100, max(gts_x) + 100).tolist()
-        dot_y = [1] * len(dot_x)
+    def compute_metrics(self):
+        gts, predictions = self._compute_predictions()
+        predictions_nms = self._apply_nms(gts, predictions)
 
-        fig, ax = plt.subplots(figsize=(15, 15))
-        ax.plot(dot_x, dot_y, color='k', linestyle='dashed')
-        ax.scatter(preds_x, preds_y, c=preds_color)
-        ax.scatter(gts_x, gts_y, c=gts_color)
+        for w_assign_to_gt in [10, 15, 20]:
+            for w_class_value in [10, 15, 20]:
+                for th_class_value in [0.85, 0.90, 0.95]:
+                    pass
 
-        legend_elements = [Line2D([0], [0], marker='o', color='w', label='Pass',
-                                  markerfacecolor='g', markersize=5),
-                           Line2D([0], [0], marker='o', color='w', label='Shot',
-                                  markerfacecolor='b', markersize=5)]
-        ax.legend(handles=legend_elements)
-        plt.show()
+        import ipdb; ipdb.set_trace()
