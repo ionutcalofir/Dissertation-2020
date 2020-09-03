@@ -1,4 +1,5 @@
 import os
+import csv
 import json
 import pickle
 import numpy as np
@@ -21,6 +22,8 @@ class HighlightDetection():
                          2: 10}
         self._th_class = {1: 0.90,
                           2: 0.90}
+
+        self._w_assign_to_gt = 15
 
     def _get_videos_information(self, game_name, window_length=None):
         if window_length is None:
@@ -244,24 +247,213 @@ class HighlightDetection():
 
         plt.show()
 
-    def _validation(self):
-        with open(self._games_txt, 'r') as f:
-            for game_name in f:
-                game_name = game_name.strip()
+    def _assign_action_to_gts(self, gts, predictions_nms, w_assign_to_gt):
+        assigned = []
+        predictions_used_frames = {}
+        for gt in gts:
+            lt = gt[0] - w_assign_to_gt
+            rt = gt[0] + w_assign_to_gt
 
-                for w_assign_to_gt in [10, 15, 20]:
-                    for w_class_value in [10, 15, 20]:
-                        for th_class_value in [0.85, 0.90, 0.95]:
-                            import ipdb; ipdb.set_trace()
+            min_dist = 2 * w_assign_to_gt + 1
+            idx = -1
+            for i, prediction_nms in enumerate(predictions_nms):
+                if lt <= prediction_nms[0] and prediction_nms[0] <= rt \
+                        and abs(gt[0] - prediction_nms[0]) < min_dist \
+                        and prediction_nms[0] not in predictions_used_frames:
+                    min_dist = abs(gt[0] - prediction_nms[0])
+                    idx = i
+
+            if idx != -1:
+                predictions_used_frames[predictions_nms[idx][0]] = True
+                assigned.append((gt[0], predictions_nms[idx][0]))
+
+        tp = len(assigned)
+        fp = max(0, len(predictions_nms) - len(assigned))
+        fn = len(gts) - len(assigned)
+
+        precision = tp / (tp + fp)
+        recall = tp / (tp + fn)
+        f1 = 2 * ((precision * recall) / (precision + recall))
+
+        return f1, precision, recall, tp, fp, fn, assigned
+
+    def _assign_to_gts(self, gts, predictions_nms, w_assign_to_gt):
+        pass_gts = [gt for gt in gts if gt[1] == 1]
+        shot_gts = [gt for gt in gts if gt[1] == 2]
+
+        pass_predictions_nms = [pred for pred in predictions_nms if pred[1] == 1]
+        shot_predictions_nms = [pred for pred in predictions_nms if pred[1] == 2]
+
+        pass_f1, pass_precision, pass_recall, pass_tp, pass_fp, pass_fn, pass_assigned = self._assign_action_to_gts(pass_gts, pass_predictions_nms, w_assign_to_gt)
+        shot_f1, shot_precision, shot_recall, shot_tp, shot_fp, shot_fn, shot_assigned = self._assign_action_to_gts(shot_gts, shot_predictions_nms, w_assign_to_gt)
+
+        return (pass_f1, pass_precision, pass_recall, pass_tp, pass_fp, pass_fn), \
+               (shot_f1, shot_precision, shot_recall, shot_tp, shot_fp, shot_fn)
+
+    def _compute_avg_metrics(self, precision, recall, f1, no_games):
+        avg_precision = sum(precision) / no_games
+        avg_recall = sum(recall) / no_games
+        avg_f1 = sum(f1) / no_games
+
+        return avg_precision, avg_recall, avg_f1
+
+    def _validation(self):
+        # window_lengths = [10, 15, 20]
+        window_lengths = [15]
+
+        w_class_values = []
+        th_class_values = []
+        for i in [10, 15, 20]:
+            for j in [10, 15, 20]:
+                w_class_values.append((i, j))
+        for i in [0.85, 0.90, 0.95]:
+            for j in [0.85, 0.90, 0.95]:
+                th_class_values.append((i, j))
+
+        w_assign_to_gt_values = [10, 15, 20]
+
+        iterations = len(window_lengths) \
+                    * len(w_class_values) \
+                    * len(th_class_values) \
+                    * len(w_assign_to_gt_values)
+        idx = 0
+
+        validation_dict = {}
+        for window_length in window_lengths[:2]:
+            for w_assign_to_gt in w_assign_to_gt_values[:2]:
+                for w_class_value in w_class_values[:2]:
+                    for th_class_value in th_class_values[:2]:
+                        idx += 1
+                        print('Preprocess iteration {}/{}'.format(idx, iterations))
+
+                        no_games = 0
+                        precisions = []
+                        recalls = []
+                        f1s = []
+                        with open(self._games_txt, 'r') as f:
+                            for game_name in f:
+                                no_games += 1
+                                game_name = game_name.strip()
+                                print('Preprocess game: {}'.format(game_name))
+
+                                gts, predictions = self._compute_predictions(game_name, window_length)
+
+                                w_class = {1: w_class_value[0],
+                                           2: w_class_value[1]}
+                                th_class = {1: th_class_value[0],
+                                            2: th_class_value[1]}
+                                predictions_nms = self._apply_nms(gts, predictions, w_class, th_class)
+
+                                (pass_f1, pass_precision, pass_recall, _, _, _), \
+                                (shot_f1, shot_precision, shot_recall, _, _, _) = \
+                                        self._assign_to_gts(gts, predictions_nms, w_assign_to_gt)
+
+                                precisions.append((pass_precision, shot_precision))
+                                recalls.append((pass_recall, shot_recall))
+                                f1s.append((pass_f1, shot_f1))
+
+                        key = 'window_length_{}_w_assign_to_gt_{}_w_class_value_{}_th_class_value_{}'.format(window_length,
+                                                                                                             w_assign_to_gt,
+                                                                                                             w_class_value,
+                                                                                                             th_class_value)
+
+                        pass_avg_precision, pass_avg_recall, pass_avg_f1 = self._compute_avg_metrics([precision[0] for precision in precisions],
+                                                                                                     [recall[0] for recall in recalls],
+                                                                                                     [f1[0] for f1 in f1s],
+                                                                                                     no_games)
+                        shot_avg_precision, shot_avg_recall, shot_avg_f1 = self._compute_avg_metrics([precision[1] for precision in precisions],
+                                                                                                     [recall[1] for recall in recalls],
+                                                                                                     [f1[1] for f1 in f1s],
+                                                                                                     no_games)
+
+                        validation_dict[key] = {}
+                        validation_dict[key]['pass'] = {}
+                        validation_dict[key]['pass']['precision'] = pass_avg_precision
+                        validation_dict[key]['pass']['recall'] = pass_avg_recall
+                        validation_dict[key]['pass']['f1'] = pass_avg_f1
+                        validation_dict[key]['shot'] = {}
+                        validation_dict[key]['shot']['precision'] = shot_avg_precision
+                        validation_dict[key]['shot']['recall'] = shot_avg_recall
+                        validation_dict[key]['shot']['f1'] = shot_avg_f1
+
+        with open(os.path.join(self._root_path, 'validation.csv'), 'w') as f:
+            fieldnames = ['VALIDATION PARAMS',
+                          'PASS AVG PRECISION', 'PASS AVG RECALL', 'PASS AVG F1',
+                          'SHOT AVG PRECISION', 'SHOT AVG RECALL', 'SHOT AVG F1']
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+
+            writer.writeheader()
+            for key in validation_dict.keys():
+                writer.writerow({'VALIDATION PARAMS': key,
+                                 'PASS AVG PRECISION': validation_dict[key]['pass']['precision'],
+                                 'PASS AVG RECALL': validation_dict[key]['pass']['recall'],
+                                 'PASS AVG F1': validation_dict[key]['pass']['f1'],
+                                 'SHOT AVG PRECISION': validation_dict[key]['shot']['precision'],
+                                 'SHOT AVG RECALL': validation_dict[key]['shot']['recall'],
+                                 'SHOT AVG F1': validation_dict[key]['shot']['f1']})
 
     def _test(self):
+        test_dict = {}
+        no_games = 0
+        precisions = []
+        recalls = []
+        f1s = []
         with open(self._games_txt, 'r') as f:
             for game_name in f:
+                no_games += 1
                 game_name = game_name.strip()
+                print('Preprocess game: {}'.format(game_name))
 
                 gts, predictions = self._compute_predictions(game_name)
                 predictions_nms = self._apply_nms(gts, predictions)
-                # TODO
+
+                (pass_f1, pass_precision, pass_recall, _, _, _), \
+                (shot_f1, shot_precision, shot_recall, _, _, _) = \
+                        self._assign_to_gts(gts, predictions_nms, self._w_assign_to_gt)
+
+                precisions.append((pass_precision, shot_precision))
+                recalls.append((pass_recall, shot_recall))
+                f1s.append((pass_f1, shot_f1))
+
+        key = 'window_length_{}_w_assign_to_gt_{}_w_class_value_{}_th_class_value_{}'.format(self._window_length,
+                                                                                             self._w_assign_to_gt,
+                                                                                             (self._w_class[1], self._w_class[2]),
+                                                                                             (self._th_class[1], self._th_class[2]))
+
+        pass_avg_precision, pass_avg_recall, pass_avg_f1 = self._compute_avg_metrics([precision[0] for precision in precisions],
+                                                                                     [recall[0] for recall in recalls],
+                                                                                     [f1[0] for f1 in f1s],
+                                                                                     no_games)
+        shot_avg_precision, shot_avg_recall, shot_avg_f1 = self._compute_avg_metrics([precision[1] for precision in precisions],
+                                                                                     [recall[1] for recall in recalls],
+                                                                                     [f1[1] for f1 in f1s],
+                                                                                     no_games)
+
+        test_dict[key] = {}
+        test_dict[key]['pass'] = {}
+        test_dict[key]['pass']['precision'] = pass_avg_precision
+        test_dict[key]['pass']['recall'] = pass_avg_recall
+        test_dict[key]['pass']['f1'] = pass_avg_f1
+        test_dict[key]['shot'] = {}
+        test_dict[key]['shot']['precision'] = shot_avg_precision
+        test_dict[key]['shot']['recall'] = shot_avg_recall
+        test_dict[key]['shot']['f1'] = shot_avg_f1
+
+        with open(os.path.join(self._root_path, 'test.csv'), 'w') as f:
+            fieldnames = ['TEST PARAMS',
+                          'PASS AVG PRECISION', 'PASS AVG RECALL', 'PASS AVG F1',
+                          'SHOT AVG PRECISION', 'SHOT AVG RECALL', 'SHOT AVG F1']
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+
+            writer.writeheader()
+            for key in test_dict.keys():
+                writer.writerow({'TEST PARAMS': key,
+                                 'PASS AVG PRECISION': test_dict[key]['pass']['precision'],
+                                 'PASS AVG RECALL': test_dict[key]['pass']['recall'],
+                                 'PASS AVG F1': test_dict[key]['pass']['f1'],
+                                 'SHOT AVG PRECISION': test_dict[key]['shot']['precision'],
+                                 'SHOT AVG RECALL': test_dict[key]['shot']['recall'],
+                                 'SHOT AVG F1': test_dict[key]['shot']['f1']})
 
     def compute_expected_goals(self):
         with open(self._games_txt, 'r') as f:
