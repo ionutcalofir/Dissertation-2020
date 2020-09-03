@@ -8,26 +8,11 @@ from matplotlib.lines import Line2D
 from PIL import Image
 
 class HighlightDetection():
-    def __init__(self, game_path, window_length):
-        self._game_path = game_path
+    def __init__(self, root_path, window_length, phase, games_txt):
+        self._root_path = root_path
         self._window_length = window_length
-
-        self._sliding_windows = json.load(open(os.path.join(game_path,
-                                                            'sliding_window_videos/sliding_window_videos_information_length_{}/sliding_window_videos_information.json'.format(self._window_length)), 'r'))
-        self._predictions = json.load(open(os.path.join(game_path,
-                                                        'sliding_window_videos/sliding_window_videos_information_length_{}/sliding_window_videos_predictions.json'.format(self._window_length)), 'r'))
-
-        actions = [action for action in sorted(os.listdir(os.path.join(game_path, 'gt_videos')))
-                        if 'expected_goals' not in action]
-
-        self._actions = {}
-        for action in actions:
-            action_name = '_'.join(action.split('_')[1:-1])
-            frame = action.split('_')[-1][:-4]
-
-            self._actions['frame_{}'.format(frame)] = {}
-            self._actions['frame_{}'.format(frame)]['action_name'] = action_name
-            self._actions['frame_{}'.format(frame)]['path'] = os.path.join(game_path, 'gt_videos', action)
+        self._phase = phase
+        self._games_txt = games_txt
 
         # 1 - pass
         # 2 - shot
@@ -36,6 +21,29 @@ class HighlightDetection():
                          2: 10}
         self._th_class = {1: 0.90,
                           2: 0.90}
+
+    def _get_videos_information(self, game_name, window_length=None):
+        if window_length is None:
+            window_length = self._window_length
+
+        sliding_windows = json.load(open(os.path.join(self._root_path, game_name,
+                                                      'sliding_window_videos/sliding_window_videos_information_length_{}/sliding_window_videos_information.json'.format(window_length)), 'r'))
+        predictions = json.load(open(os.path.join(self._root_path, game_name,
+                                                  'sliding_window_videos/sliding_window_videos_information_length_{}/sliding_window_videos_predictions.json'.format(window_length)), 'r'))
+
+        all_actions = [action for action in sorted(os.listdir(os.path.join(self._root_path, game_name, 'gt_videos')))
+                        if 'expected_goals' not in action]
+
+        actions = {}
+        for action in all_actions:
+            action_name = '_'.join(action.split('_')[1:-1])
+            frame = action.split('_')[-1][:-4]
+
+            actions['frame_{}'.format(frame)] = {}
+            actions['frame_{}'.format(frame)]['action_name'] = action_name
+            actions['frame_{}'.format(frame)]['path'] = os.path.join(self._root_path, game_name, 'gt_videos', action)
+
+        return actions, sliding_windows, predictions
 
     def _show_plot(self, gts, predictions):
         gts_x = [gt[0] for gt in gts]
@@ -114,11 +122,13 @@ class HighlightDetection():
         predictions_nms.sort(key=lambda x: x[0])
         return predictions_nms
 
-    def _compute_predictions(self):
+    def _compute_predictions(self, game_name, window_length=None):
+        info_actions, info_sliding_windows, info_predictions = self._get_videos_information(game_name, window_length)
+
         predictions = [] # tuple (start_frame_idx, prediction_idx, probability_prediction_idx, sliding_window)
-        for idx, (sliding_window, prediction) in enumerate(self._predictions.items()):
-            start_frame_idx = self._sliding_windows[sliding_window]['start_frame_idx']
-            end_frame_idx = self._sliding_windows[sliding_window]['end_frame_idx']
+        for idx, (sliding_window, prediction) in enumerate(info_predictions.items()):
+            start_frame_idx = info_sliding_windows[sliding_window]['start_frame_idx']
+            end_frame_idx = info_sliding_windows[sliding_window]['end_frame_idx']
             prediction_idx = np.argmax(prediction) 
 
             if prediction_idx == 0:
@@ -127,8 +137,8 @@ class HighlightDetection():
             predictions.append((start_frame_idx, prediction_idx, prediction[prediction_idx], sliding_window))
 
         gts = [] # tuple
-        for frame in self._actions.keys():
-            action_name = self._actions[frame]['action_name']
+        for frame in info_actions.keys():
+            action_name = info_actions[frame]['action_name']
             frame_idx = int(frame.split('_')[-1])
 
             gts.append((frame_idx, 1 if action_name == 'pass' else 2))
@@ -136,12 +146,12 @@ class HighlightDetection():
 
         return gts, predictions
 
-    def compute_expected_goals(self):
+    def _compute_expected_goals(self, game_name):
         # predictions for expected goals
         prefix = 'sliding_window_videos/sliding_window_videos_expected_goals'
-        output_dir = os.path.join(self._game_path, 'sliding_window_videos/sliding_window_videos_information_expected_goals')
+        output_dir = os.path.join(self._root_path, game_name, 'sliding_window_videos/sliding_window_videos_information_expected_goals')
 
-        gts, predictions = self._compute_predictions()
+        gts, predictions = self._compute_predictions(game_name)
         predictions_nms = self._apply_nms(gts, predictions)
         predictions_nms = [pred for pred in predictions_nms if pred[1] == 2]
 
@@ -149,7 +159,7 @@ class HighlightDetection():
             for pred in predictions_nms:
                 start_frame_idx = pred[0] - 20 # back 20 frames so the video stops right when the player performs the shot
 
-                expected_goals_videos = sorted(os.listdir(os.path.join(self._game_path, prefix)))
+                expected_goals_videos = sorted(os.listdir(os.path.join(self._root_path, game_name, prefix)))
                 for expected_goals_video in expected_goals_videos:
                     video_start_idx = int(expected_goals_video.split('_')[-2])
                     if start_frame_idx == video_start_idx:
@@ -160,14 +170,14 @@ class HighlightDetection():
 
         # gts for expected goals
         prefix = 'gt_videos'
-        output_dir = os.path.join(self._game_path, 'gt_videos_observations')
+        output_dir = os.path.join(self._root_path, game_name, 'gt_videos_observations')
 
         with open(os.path.join(output_dir, 'test.csv'), 'w') as f:
-            for video_name in sorted(os.listdir(os.path.join(self._game_path, 'gt_videos'))):
+            for video_name in sorted(os.listdir(os.path.join(self._root_path, game_name, 'gt_videos'))):
                 if '_'.join(video_name.split('_')[1:-1]) == 'expected_goals':
                     f.write('{}/{} -1\n'.format(prefix, video_name))
 
-    def plot_expected_goals(self):
+    def _plot_expected_goals(self, game_name):
         SMM_WIDTH = 96
         SMM_HEIGHT = 72
 
@@ -176,11 +186,13 @@ class HighlightDetection():
         MINIMAP_NORM_Y_MIN = -1.0 / 2.25
         MINIMAP_NORM_Y_MAX = 1.0 / 2.25
 
-        expected_goals_information = json.load(open(os.path.join(self._game_path, 'sliding_window_videos/sliding_window_videos_information_expected_goals/sliding_window_videos_information.json'), 'r'))
-        expected_goals_predictions = json.load(open(os.path.join(self._game_path, 'sliding_window_videos/sliding_window_videos_information_expected_goals/sliding_window_videos_predictions.json'), 'r'))
-        football_observations = json.load(open(os.path.join(self._game_path, 'football_observations.json'), 'r'))
+        expected_goals_information = json.load(open(os.path.join(self._root_path, game_name,
+                                                                 'sliding_window_videos/sliding_window_videos_information_expected_goals/sliding_window_videos_information.json'), 'r'))
+        expected_goals_predictions = json.load(open(os.path.join(self._root_path, game_name,
+                                                                 'sliding_window_videos/sliding_window_videos_information_expected_goals/sliding_window_videos_predictions.json'), 'r'))
+        football_observations = json.load(open(os.path.join(self._root_path, game_name, 'football_observations.json'), 'r'))
 
-        radar = Image.open('/home/ionutc/Documents/radar.bmp').convert('RGB')
+        radar = Image.open('files/radar.bmp').convert('RGB')
         frame = np.array(radar.resize((SMM_WIDTH, SMM_HEIGHT)))
 
         mask = np.all(frame == [128, 128, 128], axis=-1)
@@ -206,8 +218,8 @@ class HighlightDetection():
             circle = Circle((ball_x, ball_y), radius)
             ax[0].add_patch(circle)
 
-        expected_goals_gts_information = json.load(open(os.path.join(self._game_path, 'gt_videos_observations/ground_truth_videos_information.json'), 'r'))
-        expected_goals_gts_predictions = json.load(open(os.path.join(self._game_path, 'gt_videos_observations/sliding_window_videos_predictions.json'), 'r'))
+        expected_goals_gts_information = json.load(open(os.path.join(self._root_path, game_name, 'gt_videos_observations/ground_truth_videos_information.json'), 'r'))
+        expected_goals_gts_predictions = json.load(open(os.path.join(self._root_path, game_name, 'gt_videos_observations/sliding_window_videos_predictions.json'), 'r'))
 
         for key, value in expected_goals_gts_predictions.items():
             prob_goal = value[1]
@@ -232,20 +244,52 @@ class HighlightDetection():
 
         plt.show()
 
-    def show_highlight(self):
-        gts, predictions = self._compute_predictions()
-        predictions_nms = self._apply_nms(gts, predictions)
+    def _validation(self):
+        with open(self._games_txt, 'r') as f:
+            for game_name in f:
+                game_name = game_name.strip()
 
-        self._show_plot(gts, predictions)
-        self._show_plot(gts, predictions_nms)
+                for w_assign_to_gt in [10, 15, 20]:
+                    for w_class_value in [10, 15, 20]:
+                        for th_class_value in [0.85, 0.90, 0.95]:
+                            import ipdb; ipdb.set_trace()
+
+    def _test(self):
+        with open(self._games_txt, 'r') as f:
+            for game_name in f:
+                game_name = game_name.strip()
+
+                gts, predictions = self._compute_predictions(game_name)
+                predictions_nms = self._apply_nms(gts, predictions)
+                # TODO
+
+    def compute_expected_goals(self):
+        with open(self._games_txt, 'r') as f:
+            for game_name in f:
+                game_name = game_name.strip()
+
+                self._compute_expected_goals(game_name)
+
+    def show_highlight(self):
+        with open(self._games_txt, 'r') as f:
+            for game_name in f:
+                game_name = game_name.strip()
+
+                gts, predictions = self._compute_predictions(game_name)
+                predictions_nms = self._apply_nms(gts, predictions)
+
+                self._show_plot(gts, predictions)
+                self._show_plot(gts, predictions_nms)
+
+    def plot_expected_goals(self):
+        with open(self._games_txt, 'r') as f:
+            for game_name in f:
+                game_name = game_name.strip()
+
+                self._plot_expected_goals(game_name)
 
     def compute_metrics(self):
-        gts, predictions = self._compute_predictions()
-        predictions_nms = self._apply_nms(gts, predictions)
-
-        for w_assign_to_gt in [10, 15, 20]:
-            for w_class_value in [10, 15, 20]:
-                for th_class_value in [0.85, 0.90, 0.95]:
-                    pass
-
-        import ipdb; ipdb.set_trace()
+        if self._phase == 'validation':
+            self._validation()
+        elif self._phase == 'test':
+            self._test()
