@@ -4,7 +4,7 @@ import itertools
 import torch.nn as nn
 import numpy as np
 import matplotlib.pyplot as plt
-from sklearn.metrics import confusion_matrix
+from sklearn.metrics import confusion_matrix, average_precision_score, cohen_kappa_score
 from torch.utils.tensorboard import SummaryWriter
 
 from model import Model
@@ -120,7 +120,7 @@ class Engine:
             correct_preds += np.sum(labels.cpu().detach().numpy() == torch.argmax(y_pred, dim=1).cpu().detach().numpy())
             acc = correct_preds / total_num_images
 
-            if idx % 10 == 0:
+            if (idx + 1) % 10 == 0:
                 print('Ep: {}, It: {}/{}, Lr: {}, Loss: {}, Acc: {}'
                             .format(epoch,
                                     idx + 1, len(self._train_data_loader),
@@ -201,7 +201,7 @@ class Engine:
 
                 all_goal_probs.extend(y_pred[:, 1].cpu().detach().numpy().tolist())
 
-                if idx % 10 == 0:
+                if (idx + 1) % 10 == 0:
                     print('Ep: {}, It: {}/{}, Loss: {}, Acc: {}'
                                 .format(epoch,
                                         idx + 1, len(data_loader),
@@ -232,6 +232,13 @@ class Engine:
             self._writer.add_scalar(tag='{}/Precision'.format(header), scalar_value=precision, global_step=epoch)
             self._writer.add_scalar(tag='{}/Recall'.format(header), scalar_value=recall, global_step=epoch)
             self._writer.add_scalar(tag='{}/F1'.format(header), scalar_value=f1, global_step=epoch)
+
+            auc_pr = average_precision_score(all_labels, all_goal_probs)
+            auc_pr_random = sum(all_labels) / len(all_labels)
+            cohen_kappa = cohen_kappa_score(all_labels, all_preds)
+            self._writer.add_scalar(tag='{}/Random AUC-PR'.format(header), scalar_value=auc_pr_random, global_step=epoch)
+            self._writer.add_scalar(tag='{}/AUC-PR'.format(header), scalar_value=auc_pr, global_step=epoch)
+            self._writer.add_scalar(tag='{}/Cohen Kappa'.format(header), scalar_value=cohen_kappa, global_step=epoch)
 
     def train(self):
         for epoch in range(self._epochs):
