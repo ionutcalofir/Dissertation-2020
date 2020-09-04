@@ -9,7 +9,7 @@ class ConfigsGeneration:
                  dataset_path):
         self._dataset_name = dataset_name
         self._dataset_path = dataset_path
-        self._train_percentage = 0.90
+        self._train_percentage = 0.70
 
         if self._dataset_name == 'video_recognition':
             self.cls_to_id = {
