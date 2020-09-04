@@ -5,24 +5,22 @@ Get all results from https://understat.com/
 import os
 import asyncio
 import json
-
 import aiohttp
-
 from understat import Understat
 
-ROOT_DIR = 'matches'
-os.makedirs(ROOT_DIR, exist_ok=True)
+MATCHES_DIR = 'matches'
+os.makedirs(MATCHES_DIR, exist_ok=True)
 
 async def main(league, year):
     async with aiohttp.ClientSession() as session:
         understat = Understat(session)
 
-        fixtures = await understat.get_league_results(
+        matches = await understat.get_league_results(
             league,
             year
         )
 
-        json.dump(fixtures, open(os.path.join(ROOT_DIR, 'fixtures_{}_{}.json'.format(league, year)), 'w'))
+        json.dump(matches, open(os.path.join(MATCHES_DIR, 'matches_{}_{}.json'.format(league, year)), 'w'))
 
 loop = asyncio.get_event_loop()
 
