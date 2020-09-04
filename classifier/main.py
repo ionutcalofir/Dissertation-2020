@@ -17,7 +17,7 @@ if not FLAGS.is_parsed():
     flags.DEFINE_string('train_data_cfg', '/mnt/storage1/dissertation_dataset/expected_goals/configs/train.csv', 'Path to train cfg')
     flags.DEFINE_string('val_data_cfg', '/mnt/storage1/dissertation_dataset/expected_goals/configs/val.csv', 'Path to val cfg')
     flags.DEFINE_string('test_data_cfg', '/mnt/storage1/dissertation_dataset/expected_goals/configs/test.csv', 'Path to test cfg')
-    flags.DEFINE_integer('epochs', 100, 'Number of epochs')
+    flags.DEFINE_integer('epochs', 50, 'Number of epochs')
     flags.DEFINE_string('data_path', '/mnt/storage1/dissertation_dataset/expected_goals', 'Path to test cfg')
     flags.DEFINE_string('logdir', None, 'Where to save the experiments.')
 

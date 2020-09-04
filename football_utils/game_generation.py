@@ -108,7 +108,7 @@ class GameGeneration:
                 self._observations.dump_observations(observations_path, action_frame[2])
 
             for cls in action_frames:
-                Parallel(n_jobs=-2)(delayed(save_videos)(i, action_frame, cls, len(action_frames[cls])) for i, action_frame in enumerate(action_frames[cls]))
+                Parallel(n_jobs=5)(delayed(save_videos)(i, action_frame, cls, len(action_frames[cls])) for i, action_frame in enumerate(action_frames[cls]))
 
             football_observations = {}
             for start_frame_idx in range(0, len(observations) // 10):
@@ -167,4 +167,4 @@ class GameGeneration:
                     frames = [self._frames.get_frame(frames_path[frame]) for frame in range(sliding_window_frame[0], sliding_window_frame[1])]
                     self._video.dump_video(video_path, frames)
 
-                Parallel(n_jobs=-2)(delayed(save_videos_sliding_window)(i, sliding_window_frame, len(sliding_window_frames)) for i, sliding_window_frame in enumerate(sliding_window_frames))
+                Parallel(n_jobs=5)(delayed(save_videos_sliding_window)(i, sliding_window_frame, len(sliding_window_frames)) for i, sliding_window_frame in enumerate(sliding_window_frames))
