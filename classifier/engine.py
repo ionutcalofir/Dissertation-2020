@@ -219,8 +219,8 @@ class Engine:
 
             figure = self._plot_confusion_matrix(cm, 2, ['no_goal', 'goal'])
             figure_normalized = self._plot_confusion_matrix(cm_normalized, 2, ['no_goal', 'goal'])
-            self._writer.add_figure(tag='{}/Confusion Matrix'.format(header), figure=figure, global_step=epoch)
-            self._writer.add_figure(tag='{}/Confusion Matrix Normalized'.format(header), figure=figure_normalized, global_step=epoch)
+            self._writer.add_figure(tag='{}/Confusion Matrix Unnormalized'.format(header), figure=figure, global_step=epoch)
+            self._writer.add_figure(tag='{}/Confusion Matrix'.format(header), figure=figure_normalized, global_step=epoch)
 
             tp = cm[1, 1]
             fp = cm[0, 1]
