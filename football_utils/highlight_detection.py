@@ -271,9 +271,18 @@ class HighlightDetection():
         fp = max(0, len(predictions_nms) - len(assigned))
         fn = len(gts) - len(assigned)
 
-        precision = tp / (tp + fp)
-        recall = tp / (tp + fn)
-        f1 = 2 * ((precision * recall) / (precision + recall))
+        try:
+            precision = tp / (tp + fp)
+        except:
+            precision = 0
+        try:
+            recall = tp / (tp + fn)
+        except:
+            recall = 0
+        try:
+            f1 = 2 * ((precision * recall) / (precision + recall))
+        except:
+            f1 = 0
 
         return f1, precision, recall, tp, fp, fn, assigned
 
@@ -298,8 +307,7 @@ class HighlightDetection():
         return avg_precision, avg_recall, avg_f1
 
     def _validation(self):
-        # window_lengths = [10, 15, 20]
-        window_lengths = [15]
+        window_lengths = [10, 15, 20]
 
         w_class_values = []
         th_class_values = []
@@ -319,10 +327,10 @@ class HighlightDetection():
         idx = 0
 
         validation_dict = {}
-        for window_length in window_lengths[:2]:
-            for w_assign_to_gt in w_assign_to_gt_values[:2]:
-                for w_class_value in w_class_values[:2]:
-                    for th_class_value in th_class_values[:2]:
+        for window_length in window_lengths:
+            for w_assign_to_gt in w_assign_to_gt_values:
+                for w_class_value in w_class_values:
+                    for th_class_value in th_class_values:
                         idx += 1
                         print('Preprocess iteration {}/{}'.format(idx, iterations))
 
@@ -330,6 +338,8 @@ class HighlightDetection():
                         precisions = []
                         recalls = []
                         f1s = []
+                        num_passes = 0
+                        num_shots = 0
                         with open(self._games_txt, 'r') as f:
                             for game_name in f:
                                 no_games += 1
@@ -337,6 +347,9 @@ class HighlightDetection():
                                 print('Preprocess game: {}'.format(game_name))
 
                                 gts, predictions = self._compute_predictions(game_name, window_length)
+                                num_passes += len([gt for gt in gts if gt[1] == 1])
+                                num_shots += len([gt for gt in gts if gt[1] == 2])
+
 
                                 w_class = {1: w_class_value[0],
                                            2: w_class_value[1]}
@@ -375,11 +388,13 @@ class HighlightDetection():
                         validation_dict[key]['shot']['precision'] = shot_avg_precision
                         validation_dict[key]['shot']['recall'] = shot_avg_recall
                         validation_dict[key]['shot']['f1'] = shot_avg_f1
+                        validation_dict[key]['f1_weighted'] = (num_passes * pass_avg_f1 + num_shots * shot_avg_f1) / (num_passes + num_shots)
 
-        with open(os.path.join(self._root_path, 'validation.csv'), 'w') as f:
+        with open(os.path.join(self._root_path, 'configs', 'validation.csv'), 'w') as f:
             fieldnames = ['VALIDATION PARAMS',
                           'PASS AVG PRECISION', 'PASS AVG RECALL', 'PASS AVG F1',
-                          'SHOT AVG PRECISION', 'SHOT AVG RECALL', 'SHOT AVG F1']
+                          'SHOT AVG PRECISION', 'SHOT AVG RECALL', 'SHOT AVG F1',
+                          'F1 WEIGHTED']
             writer = csv.DictWriter(f, fieldnames=fieldnames)
 
             writer.writeheader()
@@ -390,7 +405,8 @@ class HighlightDetection():
                                  'PASS AVG F1': validation_dict[key]['pass']['f1'],
                                  'SHOT AVG PRECISION': validation_dict[key]['shot']['precision'],
                                  'SHOT AVG RECALL': validation_dict[key]['shot']['recall'],
-                                 'SHOT AVG F1': validation_dict[key]['shot']['f1']})
+                                 'SHOT AVG F1': validation_dict[key]['shot']['f1'],
+                                 'F1 WEIGHTED': validation_dict[key]['f1_weighted']})
 
     def _test(self):
         test_dict = {}
@@ -439,7 +455,7 @@ class HighlightDetection():
         test_dict[key]['shot']['recall'] = shot_avg_recall
         test_dict[key]['shot']['f1'] = shot_avg_f1
 
-        with open(os.path.join(self._root_path, 'test.csv'), 'w') as f:
+        with open(os.path.join(self._root_path, 'configs', 'test.csv'), 'w') as f:
             fieldnames = ['TEST PARAMS',
                           'PASS AVG PRECISION', 'PASS AVG RECALL', 'PASS AVG F1',
                           'SHOT AVG PRECISION', 'SHOT AVG RECALL', 'SHOT AVG F1']

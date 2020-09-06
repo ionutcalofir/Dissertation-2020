@@ -58,6 +58,8 @@ class Stats():
             classes = ['no_action', 'pass', 'shot']
         else:
             classes = ['0', '1']
+        games = set()
+        total_frames = 0
         total_videos = []
         avg_frames = []
 
@@ -71,6 +73,10 @@ class Stats():
                 no_frames += video[1]
                 no_videos += 1
 
+                game_name = '_'.join(video[0].split('_')[:2])
+                games.add(game_name)
+
+            total_frames += no_frames
             avg_frames.append(no_frames / no_videos)
             total_videos.append(no_videos)
 
@@ -86,6 +92,11 @@ class Stats():
             print('Total videos for {}: {}'.format(classes[i], total_videos[i]))
             print('Avg frames for {}: {}'.format(classes[i], avg_frames[i]))
             print()
+
+        print('Total matches: {}'.format(len(games)))
+        print('Total number of frames: {}'.format(total_frames))
+        print('Total number of seconds: {}'.format(total_frames // 10))
+        print()
 
         plt.show()
 
