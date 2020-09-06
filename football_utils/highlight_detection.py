@@ -18,12 +18,12 @@ class HighlightDetection():
         # 1 - pass
         # 2 - shot
         # These values are computed on a validation set and used for the test set.
-        self._w_class = {1: 15,
-                         2: 10}
-        self._th_class = {1: 0.90,
-                          2: 0.90}
+        self._w_class = {1: 10,
+                         2: 20}
+        self._th_class = {1: 0.85,
+                          2: 0.85}
 
-        self._w_assign_to_gt = 15
+        self._w_assign_to_gt = 20
 
     def _get_videos_information(self, game_name, window_length=None):
         if window_length is None:
