@@ -1,7 +1,43 @@
 import os
 import json
+import itertools
+import matplotlib.pyplot as plt
+import numpy as np
 from sklearn.metrics import confusion_matrix
 from sklearn.metrics import average_precision_score, cohen_kappa_score
+
+def plot_confusion_matrix(cmtx, num_classes, class_names=None, figsize=None):
+        """
+        Function from https://github.com/facebookresearch/SlowFast/blob/master/slowfast/visualization/utils.py#L48
+        """
+        if class_names is None or type(class_names) != list:
+            class_names = [str(i) for i in range(num_classes)]
+
+        figure = plt.figure(figsize=figsize)
+        plt.imshow(cmtx, interpolation="nearest", cmap=plt.cm.Blues)
+        plt.title("Confusion matrix")
+        plt.colorbar()
+        tick_marks = np.arange(len(class_names))
+        plt.xticks(tick_marks, class_names, rotation=45)
+        plt.yticks(tick_marks, class_names)
+
+        # Use white text if squares are dark; otherwise black.
+        threshold = cmtx.max() / 2.0
+        for i, j in itertools.product(range(cmtx.shape[0]), range(cmtx.shape[1])):
+            color = "white" if cmtx[i, j] > threshold else "black"
+            plt.text(
+                j,
+                i,
+                format(cmtx[i, j], ".2f") if cmtx[i, j] != 0 else ".",
+                horizontalalignment="center",
+                color=color,
+            )
+
+        plt.tight_layout()
+        plt.ylabel("True label")
+        plt.xlabel("Predicted label")
+
+        return figure
 
 MATCHES_SHOTS_DIR = 'matches_shots'
 
@@ -41,6 +77,8 @@ cm = confusion_matrix(y_true, y_pred)
 tp = cm[1, 1]
 fp = cm[0, 1]
 fn = cm[1, 0]
+figure = plot_confusion_matrix(cm, 2, ['no_goal', 'goal'])
+plt.show()
 
 precision = tp / (tp + fp)
 recall = tp / (tp + fn)
