@@ -74,9 +74,9 @@ def main(_):
                                 FLAGS.highlight_detection_phase,
                                 FLAGS.highlight_detection_games_txt)
         # ob.compute_expected_goals()
-        # ob.plot_expected_goals()
+        ob.plot_expected_goals()
         # ob.show_highlight()
-        ob.compute_metrics()
+        # ob.compute_metrics()
     elif FLAGS.phase == 'stats':
         ob = Stats(FLAGS.stats_dataset_path)
         ob.compute_stats()

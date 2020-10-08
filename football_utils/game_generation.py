@@ -88,7 +88,7 @@ class GameGeneration:
                         information_action_frames[action][start_frame_idx]['is_good_pass'] = False
                         information_action_frames[action][start_frame_idx]['end_frame_idx'] = end_frame_idx
 
-                        if action == 'shot' and action_type == 1:
+                        if (action == 'shot' or action == 'expected_goals') and action_type == 1:
                             information_action_frames[action][start_frame_idx]['is_goal'] = True
                         if action == 'pass' and action_type == 1:
                             information_action_frames[action][start_frame_idx]['is_good_pass'] = True

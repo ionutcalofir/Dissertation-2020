@@ -70,6 +70,8 @@ class HighlightDetection():
                            Line2D([0], [0], marker='o', color='w', label='Shot',
                                   markerfacecolor='b', markersize=5)]
         ax.legend(handles=legend_elements)
+        ax.set_xlabel('Frames')
+        ax.set_ylabel('Probability of event')
         plt.show()
 
     def _apply_nms_class(self, gts, predictions, class_name, w_class, th_class):
@@ -296,8 +298,12 @@ class HighlightDetection():
         pass_f1, pass_precision, pass_recall, pass_tp, pass_fp, pass_fn, pass_assigned = self._assign_action_to_gts(pass_gts, pass_predictions_nms, w_assign_to_gt)
         shot_f1, shot_precision, shot_recall, shot_tp, shot_fp, shot_fn, shot_assigned = self._assign_action_to_gts(shot_gts, shot_predictions_nms, w_assign_to_gt)
 
+        print('Num passes {}'.format(len(pass_gts)))
+        print('Num shots {}'.format(len(shot_gts)))
+
         return (pass_f1, pass_precision, pass_recall, pass_tp, pass_fp, pass_fn), \
-               (shot_f1, shot_precision, shot_recall, shot_tp, shot_fp, shot_fn)
+               (shot_f1, shot_precision, shot_recall, shot_tp, shot_fp, shot_fn), \
+               (pass_assigned, shot_assigned)
 
     def _compute_avg_metrics(self, precision, recall, f1, no_games):
         avg_precision = sum(precision) / no_games
@@ -358,7 +364,8 @@ class HighlightDetection():
                                 predictions_nms = self._apply_nms(gts, predictions, w_class, th_class)
 
                                 (pass_f1, pass_precision, pass_recall, _, _, _), \
-                                (shot_f1, shot_precision, shot_recall, _, _, _) = \
+                                (shot_f1, shot_precision, shot_recall, _, _, _), \
+                                (_, _) = \
                                         self._assign_to_gts(gts, predictions_nms, w_assign_to_gt)
 
                                 precisions.append((pass_precision, shot_precision))
@@ -414,6 +421,8 @@ class HighlightDetection():
         precisions = []
         recalls = []
         f1s = []
+        num_passes = 0
+        num_shots = 0
         with open(self._games_txt, 'r') as f:
             for game_name in f:
                 no_games += 1
@@ -422,9 +431,12 @@ class HighlightDetection():
 
                 gts, predictions = self._compute_predictions(game_name)
                 predictions_nms = self._apply_nms(gts, predictions)
+                num_passes += len([gt for gt in gts if gt[1] == 1])
+                num_shots += len([gt for gt in gts if gt[1] == 2])
 
                 (pass_f1, pass_precision, pass_recall, _, _, _), \
-                (shot_f1, shot_precision, shot_recall, _, _, _) = \
+                (shot_f1, shot_precision, shot_recall, _, _, _), \
+                (_, _) = \
                         self._assign_to_gts(gts, predictions_nms, self._w_assign_to_gt)
 
                 precisions.append((pass_precision, shot_precision))
@@ -454,11 +466,13 @@ class HighlightDetection():
         test_dict[key]['shot']['precision'] = shot_avg_precision
         test_dict[key]['shot']['recall'] = shot_avg_recall
         test_dict[key]['shot']['f1'] = shot_avg_f1
+        test_dict[key]['f1_weighted'] = (num_passes * pass_avg_f1 + num_shots * shot_avg_f1) / (num_passes + num_shots)
 
         with open(os.path.join(self._root_path, 'configs', 'test.csv'), 'w') as f:
             fieldnames = ['TEST PARAMS',
                           'PASS AVG PRECISION', 'PASS AVG RECALL', 'PASS AVG F1',
-                          'SHOT AVG PRECISION', 'SHOT AVG RECALL', 'SHOT AVG F1']
+                          'SHOT AVG PRECISION', 'SHOT AVG RECALL', 'SHOT AVG F1',
+                          'F1 WEIGHTED']
             writer = csv.DictWriter(f, fieldnames=fieldnames)
 
             writer.writeheader()
@@ -469,7 +483,8 @@ class HighlightDetection():
                                  'PASS AVG F1': test_dict[key]['pass']['f1'],
                                  'SHOT AVG PRECISION': test_dict[key]['shot']['precision'],
                                  'SHOT AVG RECALL': test_dict[key]['shot']['recall'],
-                                 'SHOT AVG F1': test_dict[key]['shot']['f1']})
+                                 'SHOT AVG F1': test_dict[key]['shot']['f1'],
+                                 'F1 WEIGHTED': test_dict[key]['f1_weighted']})
 
     def compute_expected_goals(self):
         with open(self._games_txt, 'r') as f:
@@ -479,15 +494,34 @@ class HighlightDetection():
                 self._compute_expected_goals(game_name)
 
     def show_highlight(self):
+        shot_diffs = 0
+        pass_diffs = 0
+        no_games = 0
         with open(self._games_txt, 'r') as f:
             for game_name in f:
+                no_games += 1
                 game_name = game_name.strip()
 
                 gts, predictions = self._compute_predictions(game_name)
                 predictions_nms = self._apply_nms(gts, predictions)
 
-                self._show_plot(gts, predictions)
+                (pass_f1, pass_precision, pass_recall, _, _, _), \
+                (shot_f1, shot_precision, shot_recall, _, _, _), \
+                (pass_assigned, shot_assigned) = \
+                        self._assign_to_gts(gts, predictions_nms, self._w_assign_to_gt)
+
+                print(game_name)
+                print('Pass f1 {}, precision {}, recall {}'.format(pass_f1, pass_precision, pass_recall))
+                print('Shot f1 {}, precision {}, recall {}'.format(shot_f1, shot_precision, shot_recall))
+
+                shot_diffs += sum([abs(sa[1] - sa[0]) for sa in shot_assigned])
+                pass_diffs += sum([abs(pa[1] - pa[0]) for pa in pass_assigned])
+
+                # self._show_plot(gts, predictions)
                 self._show_plot(gts, predictions_nms)
+
+        print('Avg shot diff per game {}'.format(shot_diffs / no_games))
+        print('Avg pass diff per game {}'.format(pass_diffs / no_games))
 
     def plot_expected_goals(self):
         with open(self._games_txt, 'r') as f:

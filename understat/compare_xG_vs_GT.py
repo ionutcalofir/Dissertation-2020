@@ -18,22 +18,23 @@ def autolabel(ax, rects):
                     ha='center', va='bottom')
 
 def make_plot(goals, xG):
-    labels = ['Goals vs xG']
-    goals = [goals]
+    labels = ['Actual Goals vs xG']
+    goals = [int(goals)]
     xG = [round(xG, 4)]
 
     x = np.arange(len(goals))
     width = 0.5
 
     fig, ax = plt.subplots()
-    rects1 = ax.bar(x - width / 2, goals, width, label='Goals')
+    rects1 = ax.bar(x - width / 2, goals, width, label='Actual Goals')
     rects2 = ax.bar(x + width / 2, xG, width, label='xG')
 
-    ax.set_ylabel('Values')
-    ax.set_title('Goals vs xG')
+    ax.set_ylabel('Value')
+    ax.set_title('Actual Goals vs xG')
     ax.set_xticks(x)
     ax.set_xticklabels(labels)
-    ax.set_xlim(-1., 1.)
+    ax.set_xlim(-0.6, 0.6)
+    ax.set_ylim(0., 37000)
     ax.legend()
 
     autolabel(ax, rects1)
